@@ -1,0 +1,6 @@
+src/assets/dist
+node_modules
+vendor
+build
+coverage
+docs

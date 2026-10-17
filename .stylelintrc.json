@@ -1,0 +1,8 @@
+{
+  "extends": ["stylelint-config-standard"],
+  "rules": {
+    "selector-class-pattern": "^(a2m-[a-z0-9]+(-[a-z0-9]+)*|a2m-[a-z0-9]+(-[a-z0-9]+)*--[a-z0-9-]+)$",
+    "custom-property-pattern": "^a2m-[a-z0-9-]+$",
+    "no-descending-specificity": null
+  }
+}
