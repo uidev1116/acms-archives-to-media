@@ -1,0 +1,207 @@
+<?php
+
+/**
+ * 動作確認用の子ブログ（コード a2m-test）に、未変換のテストデータを作る。何度実行しても同じ状態に戻る。
+ *
+ *   docker exec -w /var/www/plugins/ArchivesToMedia \
+ *     -e ACMS_DB_HOST=db -e ACMS_DB_NAME=db_my-blog-site -e ACMS_DB_USER=root \
+ *     -e ACMS_DB_PASS="$(docker exec my-blog-site-backend-db-1 printenv MYSQL_ROOT_PASSWORD)" \
+ *     my-blog-site-backend-web-1 php docs/verification/seed-a2m-test.php
+ *
+ * 安全のため、コードが a2m-test の子ブログ（親ブログではない）だけを対象にする。
+ * 親ブログ（既存コンテンツ）には一切触れない。
+ *
+ * 作るもの:
+ *   エントリー a2m-units  … 画像ユニット（large 版あり／なし／ファイル欠落／多言語）、ファイルユニット
+ *   エントリー a2m-fields … 画像フィールド（グループ内を含む）、ファイルフィールド、ファイルが無いフィールド
+ *   エントリー a2m-locked … 編集ロック中のエントリー（ENTRY_LOCKED のスキップ確認用）
+ *   エントリー a2m-many   … 画像ユニット 30 件（一時停止・再開の確認用）
+ *   archives/a2m-test/    … 上記が参照する実ファイル
+ */
+
+declare(strict_types=1);
+
+require __DIR__ . '/../../vendor/autoload.php';
+
+\Acms\TestingFramework\Bootstrap::boot(getenv('ACMS_ROOT') ?: '/var/www/html');
+
+use Acms\Services\Facades\Database;
+
+const BLOG_CODE = 'a2m-test';
+const UNIT_DELIM = ':acms_unit_delimiter:';
+
+/**
+ * @param array<scalar|null> $params
+ * @return mixed
+ */
+function q(string $sql, array $params = [], string $mode = 'all')
+{
+    return Database::query(['sql' => $sql, 'params' => $params], $mode);
+}
+
+function t(string $table): string
+{
+    return DB_PREFIX . $table;
+}
+
+function nextval(string $column): int
+{
+    q('UPDATE ' . t('sequence') . " SET {$column} = {$column} + 1", [], 'exec');
+    return (int) q('SELECT ' . $column . ' FROM ' . t('sequence'), [], 'one');
+}
+
+$blog = q('SELECT blog_id, blog_parent FROM ' . t('blog') . ' WHERE blog_code = ?', [BLOG_CODE], 'row');
+if (!is_array($blog) || (int) $blog['blog_parent'] === 0) {
+    fwrite(STDERR, "子ブログ " . BLOG_CODE . " が見つかりません。先に管理画面で作成してください。\n");
+    exit(1);
+}
+$blogId = (int) $blog['blog_id'];
+$archivesRoot = rtrim(SCRIPT_DIR, '/') . '/' . trim(ARCHIVES_DIR, '/') . '/';
+$dir = $archivesRoot . BLOG_CODE . '/';
+
+// ---------------------------------------------------------------- 片付け（この子ブログの分だけ）
+$entryIds = array_map(static fn ($r) => (int) $r['entry_id'], q('SELECT entry_id FROM ' . t('entry') . ' WHERE entry_blog_id = ?', [$blogId]));
+foreach (['column', 'column_rev', 'field', 'field_rev'] as $table) {
+    $col = str_starts_with($table, 'column') ? 'column_blog_id' : 'field_blog_id';
+    q('DELETE FROM ' . t($table) . " WHERE {$col} = ?", [$blogId], 'exec');
+}
+foreach (['entry', 'entry_rev'] as $table) {
+    q('DELETE FROM ' . t($table) . ' WHERE entry_blog_id = ?', [$blogId], 'exec');
+}
+q('DELETE FROM ' . t('media') . ' WHERE media_blog_id = ?', [$blogId], 'exec');
+q('DELETE FROM ' . t('a2m_path_map') . ' WHERE map_blog_id = ?', [$blogId], 'exec');
+q('DELETE i FROM ' . t('a2m_item') . ' i INNER JOIN ' . t('a2m_job') . ' j ON j.job_id = i.item_job_id WHERE j.job_blog_id = ?', [$blogId], 'exec');
+q('DELETE FROM ' . t('a2m_job') . ' WHERE job_blog_id = ?', [$blogId], 'exec');
+unset($entryIds);
+
+if (is_dir($dir)) {
+    foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST) as $f) {
+        $f->isDir() ? rmdir($f->getPathname()) : unlink($f->getPathname());
+    }
+} else {
+    mkdir($dir, 0755, true);
+}
+
+// ---------------------------------------------------------------- 実ファイル
+function image(string $path, int $w, int $h, int $r, int $g, int $b, string $label): void
+{
+    $im = imagecreatetruecolor($w, $h);
+    imagefill($im, 0, 0, imagecolorallocate($im, $r, $g, $b));
+    for ($i = 0; $i < 8; $i++) {
+        imagefilledellipse($im, (int) ($w * (0.1 + 0.11 * $i)), (int) ($h * (0.2 + 0.08 * $i)), (int) ($w * 0.25), (int) ($w * 0.25), imagecolorallocatealpha($im, 255, 255, 255, 100));
+    }
+    imagestring($im, 5, 12, 12, $label, imagecolorallocate($im, 255, 255, 255));
+    str_ends_with($path, '.png') ? imagepng($im, $path) : imagejpeg($im, $path, 88);
+    imagedestroy($im);
+}
+
+image($dir . 'hero.jpg', 800, 600, 31, 111, 235, 'hero (normal)');
+image($dir . 'large-hero.jpg', 1600, 1200, 31, 111, 235, 'hero (large original)');
+image($dir . 'plain.png', 640, 480, 26, 127, 55, 'plain (no large)');
+image($dir . 'ja.jpg', 640, 480, 207, 34, 46, 'ja');
+image($dir . 'en.jpg', 640, 480, 154, 103, 0, 'en');
+image($dir . 'gallery-1.jpg', 640, 480, 90, 60, 160, 'gallery 1');
+image($dir . 'gallery-2.jpg', 640, 480, 20, 140, 160, 'gallery 2');
+image($dir . 'large-gallery-2.jpg', 1280, 960, 20, 140, 160, 'gallery 2 (large)');
+copy($dir . 'plain.png', $dir . 'plain-copy.png'); // 内容が同じ別パス（既存メディアの再利用の確認）
+file_put_contents(
+    $dir . 'estimate.pdf',
+    "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+    . "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n"
+);
+for ($i = 1; $i <= 30; $i++) {
+    image($dir . sprintf('many-%02d.jpg', $i), 320, 240, ($i * 37) % 200 + 30, ($i * 71) % 200 + 30, ($i * 113) % 200 + 30, 'many ' . $i);
+}
+
+// ---------------------------------------------------------------- エントリー・ユニット・フィールド
+$now = date('Y-m-d H:i:s');
+
+function entry(int $blogId, string $code, string $title, array $extra = []): int
+{
+    $id = nextval('sequence_entry_id');
+    \Acms\TestingFramework\Seeder\EntrySeeder::seed($blogId, 1, null, array_merge([
+        'entry_id' => $id, 'entry_code' => $code, 'entry_title' => $title, 'entry_status' => 'open',
+        'entry_datetime' => date('Y-m-d H:i:s'),
+    ], $extra));
+    return $id;
+}
+
+/**
+ * @param array<string, string> $f
+ */
+function unit(int $blogId, int $entryId, int $sort, string $type, array $f = [], string $size = ''): void
+{
+    $row = [
+        'column_id' => (string) nextval('sequence_column_id'), 'column_status' => 'open', 'column_sort' => $sort,
+        'column_align' => 'auto', 'column_type' => $type, 'column_parent_id' => null, 'column_anker' => '', 'column_attr' => '',
+        'column_group' => '', 'column_size' => $size, 'column_field_1' => '', 'column_field_2' => '', 'column_field_3' => '',
+        'column_field_4' => '', 'column_field_5' => '', 'column_field_6' => '', 'column_field_7' => '', 'column_field_8' => '',
+        'column_group_class' => '', 'column_group_tag' => '', 'column_entry_id' => $entryId, 'column_blog_id' => $blogId,
+    ];
+    foreach ($f as $k => $v) {
+        $row['column_field_' . $k] = $v;
+    }
+    q('INSERT INTO ' . t('column') . ' (' . implode(',', array_keys($row)) . ') VALUES (' . implode(',', array_fill(0, count($row), '?')) . ')', array_values($row), 'exec');
+}
+
+/**
+ * @param array<string, string> $kv
+ */
+function fieldRows(int $blogId, int $entryId, int $sort, array $kv): void
+{
+    foreach ($kv as $key => $value) {
+        q(
+            'INSERT INTO ' . t('field') . ' (field_key, field_value, field_type, field_sort, field_search, field_eid, field_blog_id) VALUES (?, ?, NULL, ?, \'off\', ?, ?)',
+            [$key, $value, $sort, $entryId, $blogId],
+            'exec'
+        );
+    }
+}
+
+/**
+ * @return array<string, string>
+ */
+function imageField(string $fd, string $path, string $large, string $alt): array
+{
+    return [
+        "{$fd}@path" => $path, "{$fd}@x" => '800', "{$fd}@y" => '600', "{$fd}@alt" => $alt, "{$fd}@fileSize" => '34567',
+        "{$fd}@largePath" => $large, "{$fd}@largeX" => $large === '' ? '' : '1600', "{$fd}@largeY" => $large === '' ? '' : '1200',
+        "{$fd}@tinyPath" => '', "{$fd}@squarePath" => '', "{$fd}@secret" => md5($fd . '@' . $path),
+    ];
+}
+
+// 1. 画像ユニット・ファイルユニット
+$e1 = entry($blogId, 'a2m-units', '画像ユニットとファイルユニット');
+$p = BLOG_CODE . '/';
+unit($blogId, $e1, 1, 'image', ['1' => 'large 版あり（リンク無し→拡大 yes の見込み）', '2' => $p . 'hero.jpg', '3' => '', '4' => 'ヒーロー画像', '5' => '50'], '800');
+unit($blogId, $e1, 2, 'image', ['1' => 'large 版なし', '2' => $p . 'plain.png', '3' => 'https://example.com/', '4' => 'プレーン画像', '5' => '']);
+unit($blogId, $e1, 3, 'image', ['1' => '内容が同じ別パス（再利用）', '2' => $p . 'plain-copy.png', '4' => '同じ画像']);
+unit($blogId, $e1, 4, 'image', ['1' => 'ファイルが無い', '2' => $p . 'missing.jpg', '4' => '欠落']);
+unit($blogId, $e1, 5, 'image', ['1' => '日本語' . UNIT_DELIM . 'English', '2' => $p . 'ja.jpg' . UNIT_DELIM . $p . 'en.jpg', '3' => '', '4' => 'あ' . UNIT_DELIM . 'a']);
+unit($blogId, $e1, 6, 'file', ['1' => '見積書（PDF）', '2' => $p . 'estimate.pdf']);
+
+// 2. フィールド
+$e2 = entry($blogId, 'a2m-fields', '画像フィールドとファイルフィールド');
+fieldRows($blogId, $e2, 1, imageField('hero', $p . 'hero.jpg', $p . 'large-hero.jpg', 'ヒーロー'));
+fieldRows($blogId, $e2, 1, ['caption' => 'グループ内のキャプション']);
+fieldRows($blogId, $e2, 1, imageField('gallery', $p . 'gallery-1.jpg', '', 'ギャラリー 1'));
+fieldRows($blogId, $e2, 2, imageField('gallery', $p . 'gallery-2.jpg', $p . 'large-gallery-2.jpg', 'ギャラリー 2'));
+fieldRows($blogId, $e2, 1, imageField('legacy', $p . 'gone.jpg', '', '消えた画像'));
+fieldRows($blogId, $e2, 1, [
+    'attachment@path' => $p . 'estimate.pdf', 'attachment@baseName' => 'estimate.pdf', 'attachment@fileSize' => '350',
+    'attachment@downloadName' => '見積書.pdf', 'attachment@originalName' => 'estimate.pdf', 'attachment@secret' => md5('attachment@' . $p . 'estimate.pdf'),
+]);
+fieldRows($blogId, $e2, 1, ['@profile' => 'hero']);
+fieldRows($blogId, $e2, 2, ['@profile' => 'caption']);
+
+// 3. 編集ロック中
+$e3 = entry($blogId, 'a2m-locked', '編集ロック中のエントリー', ['entry_lock_uid' => 1, 'entry_lock_datetime' => $now]);
+unit($blogId, $e3, 1, 'image', ['1' => 'ロック中', '2' => $p . 'ja.jpg', '4' => 'ロック中の画像']);
+
+// 4. たくさん
+$e4 = entry($blogId, 'a2m-many', '画像ユニットがたくさん');
+for ($i = 1; $i <= 30; $i++) {
+    unit($blogId, $e4, $i, 'image', ['1' => "many {$i}", '2' => $p . sprintf('many-%02d.jpg', $i), '4' => "alt {$i}"]);
+}
+
+fwrite(STDERR, "seeded blog {$blogId}: entries {$e1}, {$e2}, {$e3}, {$e4}\n");

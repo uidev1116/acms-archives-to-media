@@ -77,12 +77,12 @@ export function ScanSummary({ summary }: { summary: SummaryRow[] }) {
           {Object.entries(byTarget).map(([target, t]) => (
             <TableRow key={target}>
               <TableHead scope="row">{TARGET_LABEL[target as TargetType] ?? target}</TableHead>
-              <TableCell>{t.total}</TableCell>
-              <TableCell>{t.new}</TableCell>
-              <TableCell>{t.reuse}</TableCell>
-              <TableCell>{t.mixed}</TableCell>
-              <TableCell>{t.skipped}</TableCell>
-              <TableCell>{t.excluded}</TableCell>
+              <TableCell className="a2m-num">{t.total}</TableCell>
+              <TableCell className="a2m-num">{t.new}</TableCell>
+              <TableCell className="a2m-num">{t.reuse}</TableCell>
+              <TableCell className="a2m-num">{t.mixed}</TableCell>
+              <TableCell className="a2m-num">{t.skipped}</TableCell>
+              <TableCell className="a2m-num">{t.excluded}</TableCell>
             </TableRow>
           ))}
         </TableBody>

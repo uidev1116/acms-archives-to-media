@@ -9,6 +9,7 @@ use ACMS_App;
 use Acms\Plugins\ArchivesToMedia\Services\Admin\AdminApi;
 use Acms\Plugins\ArchivesToMedia\Services\Admin\AdminBootstrap;
 use Acms\Plugins\ArchivesToMedia\Services\Admin\ApiEndpoint;
+use Acms\Plugins\ArchivesToMedia\Services\Admin\AssetUrl;
 use Acms\Plugins\ArchivesToMedia\Services\Admin\DefinitionProvider;
 use Acms\Plugins\ArchivesToMedia\Services\Converter\FieldGroupAppender;
 use Acms\Plugins\ArchivesToMedia\Services\Converter\FieldMediaConverter;
@@ -104,8 +105,8 @@ class ServiceProvider extends ACMS_App
             ]);
         });
 
-        // URL は「/{DIR_OFFSET}相対パス」。ローカルファイルなので version（キャッシュ対策のクエリ）は自動で付く
-        $base = '/' . DIR_OFFSET . PLUGIN_DIR . 'ArchivesToMedia/assets/';
+        // ローカルファイルなので version（キャッシュ対策のクエリ）は自動で付く
+        $base = AssetUrl::base(DIR_OFFSET, PLUGIN_DIR);
         Asset::style('archives-to-media-style', $base . 'css/archives-to-media.css', [
             'position' => 'head',
         ]);

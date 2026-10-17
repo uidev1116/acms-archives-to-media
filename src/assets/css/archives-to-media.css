@@ -229,3 +229,8 @@
   background: var(--a2m-code-bg);
   font-size: 0.8125rem;
 }
+
+.a2m-root .a2m-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

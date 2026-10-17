@@ -79,10 +79,10 @@ export function JobList() {
                     <Badge variant={jobStatusVariant(j.status)}>{JOB_STATUS_LABEL[j.status]}</Badge>
                   </TableCell>
                   <TableCell>{formatDateTime(j.createdAt)}</TableCell>
-                  <TableCell>{j.total}</TableCell>
-                  <TableCell>{j.converted}</TableCell>
-                  <TableCell>{j.skipped}</TableCell>
-                  <TableCell>{j.error}</TableCell>
+                  <TableCell className="a2m-num">{j.total}</TableCell>
+                  <TableCell className="a2m-num">{j.converted}</TableCell>
+                  <TableCell className="a2m-num">{j.skipped}</TableCell>
+                  <TableCell className="a2m-num">{j.error}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
