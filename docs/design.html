@@ -498,9 +498,9 @@ public function init()
 <!-- ================================================================ -->
 <h2 id="class">8. クラス設計</h2>
 <h3>8.1 ディレクトリ構成</h3>
-<p>公式のスケルトン（<code>composer create-project ablogcms/plugin-skeleton</code>）の構成に合わせ、ロジックは <code>src/Services/</code> にまとめます。GET / POST のハンドラは CSRF・セッション・グローバル変数に依存して直接テストしにくいので、薄く保って Services を呼ぶだけにします。</p>
+<p>公式のスケルトン <a href="https://github.com/appleple/acms-plugin-skeleton">appleple/acms-plugin-skeleton</a>（<code>composer create-project ablogcms/plugin-skeleton</code>）から始め、その構成に合わせて、ロジックは <code>src/Services/</code> にまとめます。GET / POST のハンドラは CSRF・セッション・グローバル変数に依存して直接テストしにくいので、薄く保って Services を呼ぶだけにします。</p>
 <pre><code>plugins/ArchivesToMedia/
-├ composer.json / phpunit.xml.dist / phpstan.neon / phpcs.xml
+├ composer.json / phpunit.xml.dist / phpstan.neon.dist / phpcs.xml.dist   … スケルトンのまま
 ├ package.json / vite.config.ts / tsconfig.json / .stylelintrc.json
 ├ src/
 │  ├ ServiceProvider.php             … Twig 登録・InjectTemplate・アセット API・DI・install/uninstall
@@ -544,9 +544,11 @@ public function init()
 │     ├ css/archives-to-media.css     … 素の CSS
 │     └ dist/archives-to-media.js     … ビルド成果物（リリース zip に含める）
 ├ frontend/                          … TypeScript + React のソース（§6.3）
-└ tests/
-   ├ Unit/          … TestCase（DB 不要）
-   └ Integration/   … DatabaseTestCase（DB あり・自動ロールバック）</code></pre>
+├ tests/phpunit/
+│  ├ Unit/          … TestCase（DB 不要）
+│  └ Integration/   … DatabaseTestCase（DB あり・自動ロールバック）
+├ scripts/          … スケルトン同梱のリリース用スクリプト（composer package / release:*）
+└ .github/workflows/ test.yml  release.yml   … スケルトンのものに npm のビルド・lint を足す</code></pre>
 
 <h3>8.2 主要インターフェース</h3>
 <pre><code>interface ScannerInterface

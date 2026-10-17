@@ -8,6 +8,7 @@ ArchivesToMedia プラグイン（a-blog cms 拡張アプリ）を、設計書�
   - https://developer.a-blogcms.jp/document/develop_apps/
   - https://developer.a-blogcms.jp/document/develop_apps/asset-api.html
   - https://developer.a-blogcms.jp/document/develop_apps/service-container.html
+- 公式スケルトン: https://github.com/appleple/acms-plugin-skeleton（これを元に始める）
 - 既存プラグインの参考: plugins/WXRImport（構成・ServiceProvider・Lock・進捗 UI の作り）
 - コンポーネント: npm の @ablogcms/components@3.2.37（React 19）。型定義（dist/**/*.d.ts）を読んでから使う
 
@@ -33,11 +34,21 @@ ArchivesToMedia プラグイン（a-blog cms 拡張アプリ）を、設計書�
    - Docker の web / db コンテナが動いていることを確認する（`docker ps`）。止まっていたら起動する
    - ローカル DB をダンプする: `docker exec my-blog-site-backend-db-1 sh -c 'mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" db_my-blog-site' > <スクラッチパッド>/backup-before-a2m.sql`（ダンプはリポジトリの外に置き、コミットしない）。ダンプのパスは最終レポートに書く
    - 公式ドキュメントと設計書を読み、実装タスクの一覧を plugins/ArchivesToMedia/.steering/<日付>-initial/tasklist.md に書く（WXRImport の .steering と同じ形式。このリポジトリにコミットしてよい）
-2. 雛形
-   - 公式スケルトン（`composer create-project ablogcms/plugin-skeleton`）の構成に合わせて、設計書 §8.1 の構成で作る。PHP は src/、フロントのソースは frontend/、配信ファイルは src/assets/
-   - `ablogcms/extension/plugins/ArchivesToMedia` → `../../../plugins/ArchivesToMedia/src` のシンボリックリンクは張ってある。無ければ同じ形で張る（ablogcms/extension/plugins/* は親で .gitignore 済み）
-   - src/.gitkeep は雛形を置いたら消す
-   - composer（testing-framework 3.2.*、phpstan ^2.1、phpcs）、npm（vite、react 19、@ablogcms/components 3.2.37、typescript、eslint、prettier、stylelint）を入れる
+2. 雛形（公式スケルトン https://github.com/appleple/acms-plugin-skeleton から始める）
+   - まずスケルトンの README.md と composer.json・phpunit.xml.dist・phpstan.neon.dist・phpcs.xml.dist・.github/workflows/*.yml を読む
+   - スクラッチパッドで `composer create-project ablogcms/plugin-skeleton ArchivesToMedia --no-interaction --no-scripts` を実行し、続けて `php scripts/namespace.php ArchivesToMedia` で名前空間を `Acms\Plugins\ArchivesToMedia` に置き換える（post-create-project-cmd と同じく、LICENSE と CONTRIBUTING.md は消す）。create-project が使えなければ、上の GitHub リポジトリを clone して同じ手順にする
+   - 生成物を plugins/ArchivesToMedia/ に統合する。既存の docs/、LICENSE、.gitignore は残す（.gitignore はスケルトンの内容とマージ）。README.md はスケルトンの開発手順を残しつつ、このプラグインの説明に書き換える
+   - 使わないサンプル（Corrector.php、Validator.php、GET/Sample.php、POST/Sample.php、Modules/Get/V2/Sample.php、Services/SampleService.php、template/config.html、template/module-select.html、対応するテスト）は消す。Hook.php は使わなければ消す
+   - テストの置き場所はスケルトンどおり tests/phpunit/Unit と tests/phpunit/Integration。PHPStan はスケルトンの設定（level max、strict-rules）のまま通す。品質チェックは `composer check`（lint・analyse・test）
+   - 実行環境は、スケルトン同梱の docker-compose.yml ではなく、このリポジトリで動いている既存コンテナを使う（スケルトンの compose は 8080 番を使い、traefik とぶつかるため起動しない）
+     - web コンテナ my-blog-site-backend-web-1 には、CMS 本体が /var/www/html、plugins/ が /var/www/plugins にマウントされている。phpunit.xml.dist の ACMS_ROOT=/var/www/html と、phpstan の scanDirectories=/var/www/html/php は既定値のままで合う
+     - composer と PHP コマンドはコンテナ内で実行する: `docker exec -w /var/www/plugins/ArchivesToMedia my-blog-site-backend-web-1 composer check`
+     - テスト用 DB は db コンテナに `db_acms_test` を作る（本番用の db_my-blog-site とは別にする）。接続情報は、ACMS_ROOT に .env.testing を置かず、`docker exec -e ACMS_DB_HOST=db -e ACMS_DB_NAME=db_acms_test -e ACMS_DB_USER=root -e ACMS_DB_PASS="$(docker exec my-blog-site-backend-db-1 printenv MYSQL_ROOT_PASSWORD)" ...` のように環境変数で渡す（親リポジトリにファイルを増やさないため）。初回は `vendor/bin/acms-create-database`
+   - フロント用に package.json・vite.config.ts・tsconfig.json・ESLint・Prettier・Stylelint をリポジトリ直下に追加する。ソースは frontend/、ビルド出力は src/assets/dist/、素の CSS は src/assets/css/
+     - src/assets/dist/ は .gitignore に入れてコミットしない。代わりに .github/workflows/test.yml と release.yml に `npm ci && npm run build` のステップを足し、`composer package` の前にビルドされるようにする。test.yml には npm の lint・型チェックのジョブも足す
+   - ServiceProvider の $version は 0.1.0、$name は ArchivesToMedia、$author は uidev1116、$menu は archives_to_media_index にする
+   - `ablogcms/extension/plugins/ArchivesToMedia` → `../../../plugins/ArchivesToMedia/src` のシンボリックリンクは張ってある（コンテナからも /var/www/plugins 経由で解決できる）。無ければ同じ形で張る
+   - src/.gitkeep は消す。タグ（v*）は打たない。打つと release.yml が GitHub Release を公開してしまうため
 3. 実装（設計書の順に。各段階でテストを書いてから次へ進む）
    1. Domain（enum、JobOptions、Candidate、Locator）と Schema（3 テーブル。install / uninstall）
    2. Repository（Job / Item / PathMap）
@@ -49,10 +60,9 @@ ArchivesToMedia プラグイン（a-blog cms 拡張アプリ）を、設計書�
    8. ServiceProvider（Twig 登録、InjectTemplate callable、アセット API、DI）
    9. フロント（パターン A + ジョブ詳細）。@ablogcms/components を使い、足りない部品だけ a2m- 接頭辞の素の CSS で作る
 4. 自動チェック（すべて通るまで直す）
-   - `vendor/bin/phpunit`（Unit + Integration。Integration は Docker 内で testing-framework の手順に従う。テスト用 DB は db_acms_test のように本番用と別にする）
-   - `vendor/bin/phpstan analyse`（level max）
-   - `vendor/bin/phpcs`
+   - `composer check`（phpcs + PHPStan level max + PHPUnit の Unit と Integration）。web コンテナ内で、テスト用 DB の環境変数を付けて実行する
    - `npm run build`、`npm run lint`（eslint、prettier --check、stylelint）、`tsc --noEmit`
+   - push 後、GitHub Actions の test.yml の結果を `gh run list` / `gh run view` で確かめる。appleple/acms イメージがまだ公開されていないなどの環境要因で落ちる場合は、原因をレポートに書き、ローカルの結果を優先する（ワークフローを無効化はしない）
 5. 動作確認（組み込みブラウザ。サイトは https://web.my-blog-site-backend.localhost/ 。localhost:8080 は traefik のダッシュボードなので使わない）
    - 管理画面で使うテスト用の管理者ユーザーは、このセッションでローカル DB に作る。認証情報は plugins/ArchivesToMedia/.env.local（.gitignore 済み）に記録し、チャットやレポートには書かない
    - 検証用の子ブログ（例: コード a2m-test）を作り、画像ユニット・ファイルユニット・画像フィールド（グループ内を含む）・ファイルフィールド・多言語の区切りを含むエントリーと、archives/ の実ファイルを用意する。ファイルが無いケース、large- 版が無いケースも入れる
