@@ -59,6 +59,15 @@ final class FakeMediaHelper extends Helper
         return $mid;
     }
 
+    /** @var list<int> */
+    public array $deleted = [];
+
+    public function deleteItem($mid)
+    {
+        $this->deleted[] = (int) $mid;
+        Database::query(['sql' => 'DELETE FROM ' . DB_PREFIX . 'media WHERE media_id = ?', 'params' => [$mid]], 'exec');
+    }
+
     public function saveTags($mid, $tags, $bid = BID)
     {
         $this->tagCalls[] = [(string) $mid, (string) $tags];

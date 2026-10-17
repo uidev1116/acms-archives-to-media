@@ -58,6 +58,11 @@ class ItemRepository
         return $affected > 0 ? $this->db->lastInsertId() : null;
     }
 
+    public function deleteByJob(int $jobId): void
+    {
+        $this->db->exec('DELETE FROM ' . $this->db->t('a2m_item') . ' WHERE item_job_id = ?', [$jobId]);
+    }
+
     public function find(int $id): ?Item
     {
         $row = $this->db->row('SELECT * FROM ' . $this->db->t('a2m_item') . ' WHERE item_id = ?', [$id]);

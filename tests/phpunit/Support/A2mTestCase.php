@@ -9,7 +9,14 @@ use Acms\Plugins\ArchivesToMedia\Services\Converter\FieldMediaConverter;
 use Acms\Plugins\ArchivesToMedia\Services\Converter\FieldNameResolver;
 use Acms\Plugins\ArchivesToMedia\Services\Converter\UnitFileConverter;
 use Acms\Plugins\ArchivesToMedia\Services\Converter\UnitImageConverter;
+use Acms\Plugins\ArchivesToMedia\Services\Job\JobRunner;
+use Acms\Plugins\ArchivesToMedia\Services\Job\Rollbacker;
 use Acms\Plugins\ArchivesToMedia\Services\Media\ArchiveMediaResolver;
+use Acms\Plugins\ArchivesToMedia\Services\Media\MediaReferenceChecker;
+use Acms\Plugins\ArchivesToMedia\Services\Support\CacheInvalidator;
+use Acms\Plugins\ArchivesToMedia\Services\Support\EntryLockGuard;
+use Acms\Services\Common\Lock;
+use Acms\Services\Entry\Lock as EntryLock;
 use Acms\Plugins\ArchivesToMedia\Services\Media\BlogOwnershipFixer;
 use Acms\Plugins\ArchivesToMedia\Services\Media\MediaMetaWriter;
 use Acms\Plugins\ArchivesToMedia\Services\Media\SourcePathSelector;
@@ -49,6 +56,9 @@ abstract class A2mTestCase extends DatabaseTestCase
         parent::tearDown();
         if (isset($this->archives)) {
             $this->archives->destroy();
+        }
+        if ($this->lockFile !== '' && is_file($this->lockFile)) {
+            unlink($this->lockFile);
         }
     }
 
@@ -96,6 +106,83 @@ abstract class A2mTestCase extends DatabaseTestCase
     {
         $store = new FieldStore($this->db);
         return new FieldMediaConverter($store, new FieldNameResolver(), new FieldGroupAppender($store));
+    }
+
+    protected string $lockFile = '';
+
+    /**
+     * @param list<\Acms\Plugins\ArchivesToMedia\Services\Converter\ConverterInterface>|null $converters
+     */
+    protected function runner(?array $converters = null, ?\Closure $lockFactory = null): JobRunner
+    {
+        return new JobRunner(
+            $converters ?? [$this->unitImageConverter(), $this->unitFileConverter(), $this->fieldConverter()],
+            $this->resolver(),
+            $this->items(),
+            $this->jobs(),
+            new EntryLockGuard($this->db, new EntryLock('on', 'off', 48)),
+            new CacheInvalidator($this->db),
+            $this->db,
+            $lockFactory ?? $this->lockFactory(),
+        );
+    }
+
+    protected function lockFactory(): \Closure
+    {
+        if ($this->lockFile === '') {
+            $this->lockFile = rtrim(sys_get_temp_dir(), '/') . '/a2m_lock_' . bin2hex(random_bytes(4));
+        }
+        $file = $this->lockFile;
+        return static fn (): Lock => new Lock($file);
+    }
+
+    /**
+     * @param list<\Acms\Plugins\ArchivesToMedia\Services\Converter\ConverterInterface>|null $converters
+     */
+    protected function rollbacker(?array $converters = null): Rollbacker
+    {
+        return new Rollbacker(
+            $converters ?? [$this->unitImageConverter(), $this->unitFileConverter(), $this->fieldConverter()],
+            $this->items(),
+            $this->jobs(),
+            new PathMapRepository($this->db),
+            new MediaReferenceChecker($this->db),
+            $this->media,
+            new CacheInvalidator($this->db),
+            $this->lockFactory(),
+        );
+    }
+
+    /**
+     * ジョブを作ってスキャンを完了させ、job_id を返す
+     *
+     * @param array<string, mixed> $options
+     */
+    protected function scannedJob(array $options = []): int
+    {
+        $store = new FieldStore($this->db);
+        $names = new FieldNameResolver();
+        $coordinator = new \Acms\Plugins\ArchivesToMedia\Services\Job\ScanCoordinator(
+            [
+                new \Acms\Plugins\ArchivesToMedia\Services\Scanner\UnitImageScanner($this->db, $this->blogScope()),
+                new \Acms\Plugins\ArchivesToMedia\Services\Scanner\UnitFileScanner($this->db, $this->blogScope()),
+                new \Acms\Plugins\ArchivesToMedia\Services\Scanner\FieldImageScanner($this->db, $this->blogScope(), $store, $names),
+                new \Acms\Plugins\ArchivesToMedia\Services\Scanner\FieldFileScanner($this->db, $this->blogScope(), $store, $names),
+            ],
+            [$this->unitImageConverter(), $this->unitFileConverter(), $this->fieldConverter()],
+            $this->resolver(),
+            $this->items(),
+            $this->jobs(),
+        );
+        $id = $this->jobs()->create($this->blogId, 1, \Acms\Plugins\ArchivesToMedia\Services\Domain\JobOptions::fromArray($options + ['chunkSize' => 50]));
+        for ($i = 0; $i < 100; $i++) {
+            $job = $this->jobs()->find($id);
+            $this->assertNotNull($job);
+            if ($coordinator->scanChunk($job)['done']) {
+                return $id;
+            }
+        }
+        $this->fail('scan did not finish');
     }
 
     protected function blogScope(): BlogScope
