@@ -95,23 +95,42 @@ class ServiceProvider extends ACMS_App
 
         $inject = InjectTemplate::singleton();
         $inject->add('admin-topicpath', PLUGIN_DIR . 'ArchivesToMedia/template/admin/topicpath.html');
-        $inject->add('admin-main', static function (): string {
-            $bootstrap = App::make('archives-to-media.admin-bootstrap');
-            assert($bootstrap instanceof AdminBootstrap);
-            $json = json_encode($bootstrap->toArray(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            return Twig::renderTemplate('@archives_to_media/admin/main.twig', [
-                // </script> が混ざらないように JSON_HEX_TAG などでエスケープ済み
-                'bootstrap_json' => $json === false ? '{}' : $json,
-            ]);
-        });
+        $inject->add('admin-main', fn (): string => $this->renderAdminMain());
 
+        $this->registerAdminAssets();
+    }
+
+    /**
+     * 管理画面の本体（React のマウント先と、初期データの JSON）を描く。
+     */
+    public function renderAdminMain(): string
+    {
+        $bootstrap = App::make('archives-to-media.admin-bootstrap');
+        assert($bootstrap instanceof AdminBootstrap);
+        // </script> が混ざらないように JSON_HEX_TAG などでエスケープする
+        $json = json_encode($bootstrap->toArray(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        return Twig::renderTemplate('@archives_to_media/admin/main.twig', [
+            'bootstrap_json' => $json === false ? '{}' : $json,
+        ]);
+    }
+
+    /**
+     * 自分の管理画面の JS と CSS をアセット API で登録する。
+     *
+     * 管理画面のスクリプト（acms-admin）の後に読み込みたいが、標準ハンドルが登録されていないコアでは
+     * 存在しないハンドルへの依存がログに残るので、あるときだけ依存に加える。
+     *
+     * @return void
+     */
+    public function registerAdminAssets(): void
+    {
         // ローカルファイルなので version（キャッシュ対策のクエリ）は自動で付く
         $base = AssetUrl::base(DIR_OFFSET, PLUGIN_DIR);
         Asset::style('archives-to-media-style', $base . 'css/archives-to-media.css', [
             'position' => 'head',
         ]);
         Asset::script('archives-to-media', $base . 'dist/archives-to-media.js', [
-            'deps' => ['acms-admin'],
+            'deps' => Asset::has('acms-admin') ? ['acms-admin'] : [],
             'position' => 'body_end',
             'attrs' => ['type' => 'module'],
         ]);

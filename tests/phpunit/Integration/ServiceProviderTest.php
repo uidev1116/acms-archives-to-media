@@ -106,6 +106,49 @@ final class ServiceProviderTest extends A2mTestCase
     }
 
     #[Test]
+    public function 管理画面の本体はマウント先と安全にエスケープした初期データを描く(): void
+    {
+        $provider = $this->provider();
+        $html = $provider->renderAdminMain();
+
+        $this->assertStringContainsString('id="a2m-root"', $html);
+        $this->assertSame(1, preg_match('#<script type="application/json" id="a2m-bootstrap">(.*?)</script>#s', $html, $m));
+        $payload = $m[1] ?? '';
+        $data = json_decode($payload, true);
+        $this->assertIsArray($data);
+        $this->assertSame(BID, $data['blogId']);
+        $this->assertStringNotContainsString('</script', $payload);
+    }
+
+    #[Test]
+    public function 管理画面のアセットを登録する_存在しないハンドルには依存しない(): void
+    {
+        $provider = new ServiceProvider();
+        $this->assertFalse(\Acms\Services\Facades\Asset::has('acms-admin'), 'このコアには標準ハンドル acms-admin が無い');
+
+        $provider->registerAdminAssets();
+
+        $this->assertTrue(\Acms\Services\Facades\Asset::has('archives-to-media'));
+        $this->assertTrue(\Acms\Services\Facades\Asset::has('archives-to-media-style'));
+        \Acms\Services\Facades\Asset::dequeue('archives-to-media');
+        \Acms\Services\Facades\Asset::dequeue('archives-to-media-style');
+    }
+
+    #[Test]
+    public function 標準ハンドルがあるコアでは_その後に読み込む(): void
+    {
+        \Acms\Services\Facades\Asset::script('acms-admin', '/js/admin.js');
+        try {
+            (new ServiceProvider())->registerAdminAssets();
+            $this->assertTrue(\Acms\Services\Facades\Asset::has('archives-to-media'));
+        } finally {
+            \Acms\Services\Facades\Asset::dequeue('archives-to-media');
+            \Acms\Services\Facades\Asset::dequeue('archives-to-media-style');
+            \Acms\Services\Facades\Asset::dequeue('acms-admin');
+        }
+    }
+
+    #[Test]
     public function 自分の画面以外ではアセットを登録しない(): void
     {
         $this->provider();
