@@ -1,0 +1,201 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Acms\Plugins\ArchivesToMedia\Services\Scanner;
+
+use Acms\Plugins\ArchivesToMedia\Services\Converter\FieldNameResolver;
+use Acms\Plugins\ArchivesToMedia\Services\Domain\Candidate;
+use Acms\Plugins\ArchivesToMedia\Services\Domain\JobOptions;
+use Acms\Plugins\ArchivesToMedia\Services\Domain\Locator\FieldLocator;
+use Acms\Plugins\ArchivesToMedia\Services\Support\BlogScope;
+use Acms\Plugins\ArchivesToMedia\Services\Support\Db;
+use Acms\Plugins\ArchivesToMedia\Services\Support\FieldStore;
+
+/**
+ * {fd}@path を持つ field（オプションで field_rev）の行を、合成キーのキーセットページングで読む。
+ *
+ * field テーブルには主キーが無いので、キー・所属・field_sort（・リビジョン）を連結した sk を並び順に使う。
+ */
+abstract class AbstractFieldScanner implements ScannerInterface
+{
+    private const OWNERS = [
+        'entry' => 'eid',
+        'category' => 'cid',
+        'user' => 'uid',
+        'blog' => 'bid',
+        'module' => 'mid',
+        'unit' => 'unit_id',
+    ];
+
+    public function __construct(
+        protected readonly Db $db,
+        protected readonly BlogScope $scope,
+        protected readonly FieldStore $store,
+        protected readonly FieldNameResolver $names,
+    ) {
+    }
+
+    /**
+     * 同じ所属・同じ sort の {fd} 系の行から、この走査器の対象か（画像 or ファイル）を判定する。
+     *
+     * @param list<array<string, mixed>> $rows
+     */
+    abstract protected function accepts(array $rows, string $fd): bool;
+
+    /**
+     * @return list<string> 旧キーの接尾辞
+     */
+    abstract protected function legacySuffixes(): array;
+
+    public function scan(JobOptions $options, int $blogId, ?string $cursor, int $limit): array
+    {
+        $state = $this->parseCursor($cursor);
+        $blogIds = $this->scope->blogIds($blogId, $options->includeChildBlogs);
+        $tables = $options->includeRevisions ? ['field', 'field_rev'] : ['field'];
+        $startIndex = (int) array_search($state['t'], $tables, true);
+        $candidates = [];
+
+        foreach ($tables as $tableIndex => $table) {
+            if ($tableIndex < $startIndex) {
+                continue;
+            }
+            $last = $state['t'] === $table ? $state['sk'] : '';
+            $batch = max($limit, 50);
+            while (count($candidates) < $limit) {
+                $rows = $this->fetch($table, $options, $blogIds, $last, $batch);
+                if ($rows === []) {
+                    break;
+                }
+                foreach ($rows as $row) {
+                    $last = (string) $row['sk'];
+                    $candidate = $this->toCandidate($table, $row, $options);
+                    if ($candidate !== null) {
+                        $candidates[] = $candidate;
+                        if (count($candidates) >= $limit) {
+                            return ['candidates' => $candidates, 'nextCursor' => (string) json_encode(['t' => $table, 'sk' => $last])];
+                        }
+                    }
+                }
+                if (count($rows) < $batch) {
+                    break;
+                }
+            }
+        }
+        return ['candidates' => $candidates, 'nextCursor' => null];
+    }
+
+    /**
+     * @param list<int> $blogIds
+     * @return list<array<string, mixed>>
+     */
+    private function fetch(string $table, JobOptions $options, array $blogIds, string $last, int $limit): array
+    {
+        if ($blogIds === [] || $options->entryStatus === []) {
+            return [];
+        }
+        $ownerConds = [];
+        foreach (self::OWNERS as $name => $col) {
+            if (in_array($name, $options->owners, true)) {
+                $ownerConds[] = 'field_' . $col . ' IS NOT NULL';
+            }
+        }
+        if ($ownerConds === []) {
+            return [];
+        }
+        $isRev = $table === 'field_rev';
+        $sk = 'CONCAT(field_key, CHAR(1), CONCAT_WS(\'/\', field_eid, field_cid, field_uid, field_bid, field_mid, field_unit_id), CHAR(1), LPAD(field_sort, 10, \'0\')'
+            . ($isRev ? ', CHAR(1), LPAD(COALESCE(field_rev_id, 0), 10, \'0\')' : '') . ')';
+
+        $params = [];
+        $where = 'field_key LIKE \'%@path\' AND field_value IS NOT NULL AND field_value <> \'\'';
+        $where .= ' AND field_blog_id IN (' . $this->db->placeholders($blogIds) . ')';
+        array_push($params, ...$blogIds);
+        $where .= ' AND (' . implode(' OR ', $ownerConds) . ')';
+
+        // エントリーの状態（エントリー所属、ユニット所属）
+        $statuses = $options->entryStatus;
+        $in = $this->db->placeholders($statuses);
+        $where .= ' AND (field_eid IS NULL OR EXISTS (SELECT 1 FROM ' . $this->db->t('entry') . ' e WHERE e.entry_id = field_eid AND e.entry_status IN (' . $in . ')))';
+        array_push($params, ...$statuses);
+        $unitTable = $isRev ? 'column_rev' : 'column';
+        $where .= ' AND (field_unit_id IS NULL OR EXISTS (SELECT 1 FROM ' . $this->db->t($unitTable) . ' c INNER JOIN ' . $this->db->t('entry') . ' e2 ON e2.entry_id = c.column_entry_id'
+            . ' WHERE c.column_id = field_unit_id AND e2.entry_status IN (' . $in . ')))';
+        array_push($params, ...$statuses);
+
+        $params[] = $last;
+        return $this->db->all(
+            'SELECT *, ' . $sk . ' AS sk FROM ' . $this->db->t($table) . ' WHERE ' . $where
+            . ' HAVING BINARY sk > BINARY ? ORDER BY BINARY sk LIMIT ' . $limit,
+            $params
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function toCandidate(string $table, array $row, JobOptions $options): ?Candidate
+    {
+        $key = (string) $row['field_key'];
+        $fd = substr($key, 0, -5);
+        if ($fd === '' || !JobOptions::isFieldName($fd) || !$this->names->isTarget($fd, $options)) {
+            return null;
+        }
+        $ownerColumn = null;
+        $ownerId = null;
+        foreach (FieldLocator::OWNER_COLUMNS as $col) {
+            if (isset($row['field_' . $col]) && $row['field_' . $col] !== '') {
+                $ownerColumn = $col;
+                $ownerId = $col === 'unit_id' ? (string) $row['field_unit_id'] : (int) $row['field_' . $col];
+                break;
+            }
+        }
+        if ($ownerColumn === null || $ownerId === null || $ownerId === 0) {
+            return null;
+        }
+        $locator = new FieldLocator(
+            $fd,
+            (int) $row['field_sort'],
+            $ownerColumn,
+            $ownerId,
+            $table === 'field_rev' ? (int) $row['field_rev_id'] : null,
+            (int) $row['field_blog_id'],
+        );
+        $rows = $this->store->family($locator, $fd);
+        if (!$this->accepts($rows, $fd)) {
+            return null;
+        }
+
+        // 既にメディア化済み（書き込み先の @media に値がある）なら候補にしない
+        $dest = $this->names->resolve($fd, $options);
+        $destRows = $dest === $fd ? $rows : $this->store->family($locator, $dest);
+        $media = $this->store->valueOf($destRows, $dest . '@media');
+        if ($media !== null && trim($media) !== '') {
+            return null;
+        }
+        $conflict = $dest !== $fd && $destRows !== [];
+
+        return new Candidate(
+            $this->target(),
+            $locator,
+            $locator->ownerType(),
+            $ownerId,
+            (int) $row['field_blog_id'],
+            [(string) $row['field_value']],
+            [],
+            ['conflict' => $conflict],
+        );
+    }
+
+    /**
+     * @return array{t: string, sk: string}
+     */
+    private function parseCursor(?string $cursor): array
+    {
+        $data = $cursor === null ? null : json_decode($cursor, true);
+        if (!is_array($data) || !isset($data['t'], $data['sk']) || !in_array($data['t'], ['field', 'field_rev'], true)) {
+            return ['t' => 'field', 'sk' => ''];
+        }
+        return ['t' => (string) $data['t'], 'sk' => (string) $data['sk']];
+    }
+}

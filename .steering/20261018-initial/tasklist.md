@@ -1,6 +1,6 @@
 # タスクリスト: ArchivesToMedia 初期実装
 
-設計書: `docs/design.html`（決定事項: UI パターン A + ジョブ詳細、別名モード既定、リビジョン既定オフ、enlarged=auto、本文 HTML 置換は対象外）
+設計書: `docs/design.md`（決定事項: UI パターン A + ジョブ詳細、別名モード既定、リビジョン既定オフ、enlarged=auto、本文 HTML 置換は対象外）
 
 ## 方針
 
