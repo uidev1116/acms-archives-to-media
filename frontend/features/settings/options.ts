@@ -76,7 +76,7 @@ export function defaultFormState(defs: Definitions): FormState {
     includeKeysText: '',
     excludeKeysText: '',
     appendToGroup: true,
-    removeLegacyKeys: false,
+    removeLegacyKeys: true,
     owners: [...ALL_OWNERS],
     includeRevisions: false,
     includeChildBlogs: false,
@@ -138,11 +138,15 @@ export function validateForm(s: FormState): string[] {
   const errors: string[] = [];
   if (s.targets.length === 0) errors.push('変換対象を 1 つ以上選んでください。');
   if (!SUFFIX.test(s.fieldSuffix)) {
-    errors.push('フィールド名の接尾辞は半角英数字・ハイフン・アンダースコアで 32 文字以内にしてください。');
+    errors.push(
+      'フィールド名の接尾辞は半角英数字・ハイフン・アンダースコアで 32 文字以内にしてください。',
+    );
   }
   if (s.fieldMode === 'custom') {
     for (const line of parseCustomMap(s.customText).invalid) {
-      errors.push(`フィールド名の対応が不正です: ${line}（「元=先」の形式で、半角英数字・ハイフン・アンダースコアを使ってください）`);
+      errors.push(
+        `フィールド名の対応が不正です: ${line}（「元=先」の形式で、半角英数字・ハイフン・アンダースコアを使ってください）`,
+      );
     }
   }
   for (const key of [...parseList(s.includeKeysText), ...parseList(s.excludeKeysText)]) {

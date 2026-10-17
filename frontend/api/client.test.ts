@@ -75,7 +75,11 @@ describe('createClient', () => {
 
   it('JSON でない応答（セッション切れの HTML など）は bad_response', async () => {
     const fetchImpl = vi.fn(
-      async () => new Response('<html>login</html>', { status: 200, headers: { 'Content-Type': 'text/html' } }),
+      async () =>
+        new Response('<html>login</html>', {
+          status: 200,
+          headers: { 'Content-Type': 'text/html' },
+        }),
     );
     const client = make(fetchImpl as unknown as typeof fetch);
 
@@ -123,7 +127,9 @@ describe('createClient', () => {
     expect(form.getAttribute('action')).toBe('/x/');
     expect((form.elements.namedItem('jobId') as HTMLInputElement).value).toBe('7');
     expect((form.elements.namedItem('formToken') as HTMLInputElement).value).toBe('csrf');
-    expect((form.elements.namedItem('ACMS_POST_ArchivesToMedia_ExportCsv') as HTMLInputElement).value).toBe('exec');
+    expect(
+      (form.elements.namedItem('ACMS_POST_ArchivesToMedia_ExportCsv') as HTMLInputElement).value,
+    ).toBe('exec');
     // 接続していないフォームは submit されないので、submit の間だけ body に置く
     expect(connectedAtSubmit).toBe(true);
     expect(document.body.contains(form)).toBe(false);

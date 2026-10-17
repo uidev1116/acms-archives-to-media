@@ -15,9 +15,9 @@
     "test:coverage": "vitest run --coverage",
     "lint": "npm run lint:eslint && npm run lint:prettier && npm run lint:stylelint",
     "lint:eslint": "eslint frontend",
-    "lint:prettier": "prettier --check \"frontend/**/*.{ts,tsx}\" \"*.{ts,json}\" \"src/assets/css/*.css\"",
+    "lint:prettier": "prettier --check \"frontend/**/*.{ts,tsx}\" package.json tsconfig.json vite.config.ts eslint.config.js \"src/assets/css/*.css\"",
     "lint:stylelint": "stylelint \"src/assets/css/*.css\"",
-    "format": "prettier --write \"frontend/**/*.{ts,tsx}\" \"*.{ts,json}\" \"src/assets/css/*.css\""
+    "format": "prettier --write \"frontend/**/*.{ts,tsx}\" package.json tsconfig.json vite.config.ts eslint.config.js \"src/assets/css/*.css\""
   },
   "dependencies": {
     "@ablogcms/components": "3.2.37",

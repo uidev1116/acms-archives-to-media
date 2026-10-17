@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -26,7 +26,15 @@ function Harness({
   busy?: boolean;
 }) {
   const [value, setValue] = useState<FormState>({ ...defaultFormState(defs), ...initial });
-  return <SettingsStep definitions={defs} value={value} onChange={setValue} onSubmit={onSubmit} busy={busy} />;
+  return (
+    <SettingsStep
+      definitions={defs}
+      value={value}
+      onChange={setValue}
+      onSubmit={onSubmit}
+      busy={busy}
+    />
+  );
 }
 
 describe('SettingsStep', () => {
@@ -66,12 +74,26 @@ describe('SettingsStep', () => {
     await userEvent.selectOptions(screen.getByLabelText('image の変換先ユニット'), 'media_2');
     await userEvent.click(screen.getByRole('button', { name: 'スキャンして確認へ' }));
 
-    expect((onSubmit.mock.calls[0]?.[0] as JobOptions).unitTypeMap).toEqual({ image: 'media_2', file: 'media' });
+    expect((onSubmit.mock.calls[0]?.[0] as JobOptions).unitTypeMap).toEqual({
+      image: 'media_2',
+      file: 'media',
+    });
   });
 
   it('ユニットが無いサイトではその旨を表示する', () => {
-    const empty: Definitions = { mediaUnitTypes: ['media'], sourceUnitTypes: [], fieldKeys: { image: [], file: [] } };
-    render(<SettingsStep definitions={empty} value={defaultFormState(empty)} onChange={vi.fn()} onSubmit={vi.fn()} />);
+    const empty: Definitions = {
+      mediaUnitTypes: ['media'],
+      sourceUnitTypes: [],
+      fieldKeys: { image: [], file: [] },
+    };
+    render(
+      <SettingsStep
+        definitions={empty}
+        value={defaultFormState(empty)}
+        onChange={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
     expect(screen.getByText(/変換できる画像・ファイルユニットはありません/)).toBeInTheDocument();
   });
 
@@ -109,11 +131,26 @@ describe('SettingsStep', () => {
 
     await userEvent.click(within(dialog).getByRole('button', { name: 'キャンセル' }));
     expect(onSubmit).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
     await userEvent.click(screen.getByRole('button', { name: 'スキャンして確認へ' }));
-    await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '理解して続ける' }));
+    await userEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: '理解して続ける' }),
+    );
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect((onSubmit.mock.calls[0]?.[0] as JobOptions).field.removeLegacyKeys).toBe(true);
+  });
+
+  it('同名モードでは旧キーを残す選択もできる', async () => {
+    const onSubmit = vi.fn();
+    render(<Harness onSubmit={onSubmit} />);
+    await userEvent.click(screen.getByLabelText(/同名/));
+    await userEvent.click(screen.getByLabelText('旧キー（@path など）を削除する'));
+    await userEvent.click(screen.getByRole('button', { name: 'スキャンして確認へ' }));
+    await userEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: '理解して続ける' }),
+    );
+    expect((onSubmit.mock.calls[0]?.[0] as JobOptions).field.removeLegacyKeys).toBe(false);
   });
 
   it('入力に問題があるとエラーを表示して送信しない', async () => {

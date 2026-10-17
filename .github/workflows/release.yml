@@ -45,6 +45,19 @@ jobs:
         if: steps.guard.outputs.skip != 'true'
         run: php scripts/package.php --check-version="${GITHUB_REF_NAME#v}"
 
+      - name: Set up Node
+        if: steps.guard.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Build the admin UI (src/assets/dist is not committed)
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          npm ci
+          npm run build
+
       - name: Create release package
         if: steps.guard.outputs.skip != 'true'
         run: php scripts/package.php

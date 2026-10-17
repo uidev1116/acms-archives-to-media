@@ -65,7 +65,11 @@ export function useChunkRunner<R extends { done: boolean }>(
       if (mountedRef.current) setPaused(true);
     } catch (e) {
       if (mountedRef.current) {
-        setError(e instanceof ApiError ? e : new ApiError(e instanceof Error ? e.message : String(e), 0, 'unknown'));
+        setError(
+          e instanceof ApiError
+            ? e
+            : new ApiError(e instanceof Error ? e.message : String(e), 0, 'unknown'),
+        );
       }
     } finally {
       runningRef.current = false;

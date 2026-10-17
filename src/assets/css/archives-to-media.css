@@ -1,0 +1,231 @@
+/*
+ * ArchivesToMedia 管理画面の追加スタイル（素の CSS。Sass は使わない）。
+ *
+ * 見た目の大半は管理画面の acms-admin-* クラス（@ablogcms/components が出力）でまかなう。
+ * ここには components に無い部品（ステッパー、タブ、ログ表示など）だけを書く。
+ * クラスは a2m- 接頭辞、色や余白は .a2m-root にスコープしたカスタムプロパティで持つ。
+ */
+.a2m-root {
+  --a2m-gap: 1rem;
+  --a2m-gap-small: 0.5rem;
+  --a2m-border: #d5d9de;
+  --a2m-muted: #6b7280;
+  --a2m-accent: #1f6feb;
+  --a2m-accent-soft: #e8f0fe;
+  --a2m-success: #1a7f37;
+  --a2m-danger: #cf222e;
+  --a2m-warning: #9a6700;
+  --a2m-code-bg: #f6f8fa;
+
+  max-width: 72rem;
+}
+
+.a2m-root .a2m-muted {
+  color: var(--a2m-muted);
+  font-size: 0.875em;
+}
+
+.a2m-root .a2m-step {
+  margin-block: var(--a2m-gap);
+}
+
+.a2m-root .a2m-note {
+  margin-block: var(--a2m-gap);
+}
+
+.a2m-root .a2m-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--a2m-gap-small);
+  align-items: center;
+  margin-block: var(--a2m-gap);
+}
+
+.a2m-root .a2m-nav {
+  display: flex;
+  gap: var(--a2m-gap);
+  margin-block-end: var(--a2m-gap);
+  border-block-end: 1px solid var(--a2m-border);
+}
+
+.a2m-root .a2m-nav a {
+  padding: 0.5rem 0.25rem;
+  text-decoration: none;
+}
+
+.a2m-root .a2m-nav a[aria-current='page'] {
+  border-block-end: 2px solid var(--a2m-accent);
+  font-weight: bold;
+}
+
+/* ステッパー */
+.a2m-root .a2m-stepper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--a2m-gap);
+  margin: 0 0 var(--a2m-gap);
+  padding: 0;
+  list-style: none;
+}
+
+.a2m-root .a2m-stepper-item {
+  display: flex;
+  gap: var(--a2m-gap-small);
+  align-items: center;
+  color: var(--a2m-muted);
+}
+
+.a2m-root .a2m-stepper-item--current {
+  color: inherit;
+  font-weight: bold;
+}
+
+.a2m-root .a2m-stepper-no {
+  display: inline-flex;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  border: 1px solid var(--a2m-border);
+  border-radius: 50%;
+  justify-content: center;
+  align-items: center;
+}
+
+.a2m-root .a2m-stepper-item--current .a2m-stepper-no {
+  border-color: var(--a2m-accent);
+  background: var(--a2m-accent);
+  color: #fff;
+}
+
+/* フォーム */
+.a2m-root .a2m-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--a2m-gap-small) var(--a2m-gap);
+}
+
+.a2m-root .a2m-checks--column {
+  flex-direction: column;
+}
+
+.a2m-root .a2m-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--a2m-gap-small);
+  align-items: center;
+  margin-block: var(--a2m-gap-small);
+}
+
+.a2m-root .a2m-block {
+  margin-block: var(--a2m-gap-small);
+}
+
+.a2m-root .a2m-textarea {
+  inline-size: 100%;
+  max-inline-size: 32rem;
+}
+
+.a2m-root .a2m-mapping {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.a2m-root .a2m-mapping li {
+  display: flex;
+  gap: var(--a2m-gap);
+  align-items: center;
+  margin-block: var(--a2m-gap-small);
+}
+
+.a2m-root .a2m-errors {
+  margin: 0;
+  padding-inline-start: 1.25rem;
+}
+
+/* 一覧 */
+.a2m-root .a2m-filters,
+.a2m-root .a2m-bulk,
+.a2m-root .a2m-pager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--a2m-gap-small);
+  align-items: center;
+  margin-block: var(--a2m-gap-small);
+}
+
+.a2m-root .a2m-path {
+  display: block;
+  word-break: break-all;
+}
+
+.a2m-root .a2m-reasons {
+  margin-block: var(--a2m-gap-small);
+  padding-inline-start: 1.25rem;
+}
+
+/* 実行の進捗とログ */
+.a2m-root .a2m-count {
+  margin-block: var(--a2m-gap-small);
+  font-weight: bold;
+}
+
+.a2m-root .a2m-stats span + span {
+  margin-inline-start: var(--a2m-gap);
+}
+
+.a2m-root .a2m-log {
+  max-block-size: 20rem;
+  margin: var(--a2m-gap) 0;
+  padding: var(--a2m-gap-small) var(--a2m-gap-small) var(--a2m-gap-small) 2rem;
+  overflow-y: auto;
+  border: 1px solid var(--a2m-border);
+  background: var(--a2m-code-bg);
+  font-family: ui-monospace, monospace;
+  font-size: 0.8125rem;
+}
+
+.a2m-root .a2m-log-item--converted {
+  color: var(--a2m-success);
+}
+
+.a2m-root .a2m-log-item--skipped {
+  color: var(--a2m-warning);
+}
+
+.a2m-root .a2m-log-item--error {
+  color: var(--a2m-danger);
+}
+
+/* ジョブ詳細のタブ */
+.a2m-root .a2m-tabs {
+  display: flex;
+  gap: var(--a2m-gap-small);
+  margin-block-end: var(--a2m-gap);
+  border-block-end: 1px solid var(--a2m-border);
+}
+
+.a2m-root .a2m-tab {
+  padding: 0.5rem 1rem;
+  border: 0;
+  border-block-end: 2px solid transparent;
+  background: none;
+  cursor: pointer;
+}
+
+.a2m-root .a2m-tab--active {
+  border-block-end-color: var(--a2m-accent);
+  font-weight: bold;
+}
+
+/* テンプレート移行のヒント */
+.a2m-root .a2m-hint {
+  margin-block: var(--a2m-gap);
+}
+
+.a2m-root .a2m-code {
+  padding: var(--a2m-gap-small) var(--a2m-gap);
+  overflow-x: auto;
+  border: 1px solid var(--a2m-border);
+  background: var(--a2m-code-bg);
+  font-size: 0.8125rem;
+}

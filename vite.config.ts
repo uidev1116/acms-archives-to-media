@@ -32,7 +32,12 @@ export default defineConfig(({ command }) => ({
     coverage: {
       provider: 'v8',
       include: ['frontend/**/*.{ts,tsx}'],
-      exclude: ['frontend/**/*.test.{ts,tsx}', 'frontend/test/**', 'frontend/main.tsx', 'frontend/**/*.d.ts'],
+      exclude: [
+        'frontend/**/*.test.{ts,tsx}',
+        'frontend/test/**',
+        'frontend/main.tsx',
+        'frontend/**/*.d.ts',
+      ],
       reporter: ['text', 'text-summary'],
       thresholds: { lines: 90, statements: 90, functions: 90, branches: 85 },
     },

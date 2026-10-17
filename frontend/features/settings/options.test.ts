@@ -30,7 +30,10 @@ describe('parseList / parseCustomMap', () => {
       map: { hero: 'visual', doc: 'file_media' },
       invalid: [],
     });
-    expect(parseCustomMap('hero\n=x\na=b=c\n\n')).toEqual({ map: {}, invalid: ['hero', '=x', 'a=b=c'] });
+    expect(parseCustomMap('hero\n=x\na=b=c\n\n')).toEqual({
+      map: {},
+      invalid: ['hero', '=x', 'a=b=c'],
+    });
   });
 });
 
@@ -50,7 +53,11 @@ describe('defaultFormState', () => {
   });
 
   it('定義が空でもメディアユニット media を既定にする', () => {
-    const s = defaultFormState({ mediaUnitTypes: [], sourceUnitTypes: [{ type: 'image', count: 1 }], fieldKeys: { image: [], file: [] } });
+    const s = defaultFormState({
+      mediaUnitTypes: [],
+      sourceUnitTypes: [{ type: 'image', count: 1 }],
+      fieldKeys: { image: [], file: [] },
+    });
     expect(s.unitTypeMap).toEqual({ image: 'media' });
   });
 });
@@ -79,7 +86,11 @@ describe('toJobOptions / fromJobOptions', () => {
       appendToGroup: true,
       removeLegacyKeys: false,
     });
-    expect(o.media).toEqual({ fillAltOnNew: true, enlarged: 'yes', tags: ['archives-import', 'a2m'] });
+    expect(o.media).toEqual({
+      fillAltOnNew: true,
+      enlarged: 'yes',
+      tags: ['archives-import', 'a2m'],
+    });
     expect(o.chunkSize).toBe(10);
   });
 

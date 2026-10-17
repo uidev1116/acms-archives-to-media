@@ -8,7 +8,15 @@ import Radio from '@ablogcms/components/radio';
 import Select from '@ablogcms/components/select';
 import { useState } from 'react';
 import { OWNER_LABEL, TARGET_LABEL } from '../../labels';
-import type { Definitions, Enlarged, EntryStatus, FieldMode, JobOptions, OwnerType, TargetType } from '../../types';
+import type {
+  Definitions,
+  Enlarged,
+  EntryStatus,
+  FieldMode,
+  JobOptions,
+  OwnerType,
+  TargetType,
+} from '../../types';
 import { ALL_ENTRY_STATUS, ALL_OWNERS, ALL_TARGETS, toJobOptions, validateForm } from './options';
 import type { FormState } from './options';
 
@@ -29,7 +37,10 @@ const ENTRY_STATUS_LABEL: Record<EntryStatus, string> = {
 
 const FIELD_MODES: { value: FieldMode; label: string }[] = [
   { value: 'suffix', label: '別名のフィールドに書き込む（既定。旧データはそのまま残る）' },
-  { value: 'same', label: '同名のフィールドに書き込む（上級者向け・テンプレートの同時差し替えが必要）' },
+  {
+    value: 'same',
+    label: '同名のフィールドに書き込む（上級者向け・テンプレートの同時差し替えが必要）',
+  },
   { value: 'custom', label: 'カスタム（フィールドごとに書き込み先を指定）' },
 ];
 
@@ -41,7 +52,8 @@ function toggle<T>(list: T[], item: T, order: T[]): T[] {
 export function SettingsStep({ definitions, value, onChange, onSubmit, busy = false }: Props) {
   const [errors, setErrors] = useState<string[]>([]);
   const [confirmSame, setConfirmSame] = useState(false);
-  const set = <K extends keyof FormState>(key: K, v: FormState[K]) => onChange({ ...value, [key]: v });
+  const set = <K extends keyof FormState>(key: K, v: FormState[K]) =>
+    onChange({ ...value, [key]: v });
 
   const submit = () => {
     const found = validateForm(value);
@@ -56,7 +68,9 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
 
   const unitTargets = value.targets.includes('unit_image') || value.targets.includes('unit_file');
   const visibleSourceTypes = definitions.sourceUnitTypes.filter(({ type }) =>
-    type.startsWith('image') ? value.targets.includes('unit_image') : value.targets.includes('unit_file'),
+    type.startsWith('image')
+      ? value.targets.includes('unit_image')
+      : value.targets.includes('unit_file'),
   );
 
   return (
@@ -98,7 +112,9 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
                     id={`a2m-map-${type}`}
                     aria-label={`${type} の変換先ユニット`}
                     value={value.unitTypeMap[type] ?? definitions.mediaUnitTypes[0] ?? 'media'}
-                    onChange={(e) => set('unitTypeMap', { ...value.unitTypeMap, [type]: e.target.value })}
+                    onChange={(e) =>
+                      set('unitTypeMap', { ...value.unitTypeMap, [type]: e.target.value })
+                    }
                   >
                     {definitions.mediaUnitTypes.map((m) => (
                       <option key={m} value={m}>
@@ -128,7 +144,12 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
         {value.fieldMode === 'suffix' && (
           <div className="a2m-inline">
             <label htmlFor="a2m-suffix">接尾辞</label>
-            <Input id="a2m-suffix" aria-label="接尾辞" value={value.fieldSuffix} onChange={(e) => set('fieldSuffix', e.target.value)} />
+            <Input
+              id="a2m-suffix"
+              aria-label="接尾辞"
+              value={value.fieldSuffix}
+              onChange={(e) => set('fieldSuffix', e.target.value)}
+            />
             <span className="a2m-muted">例: main_image → main_image{value.fieldSuffix}</span>
           </div>
         )}
@@ -144,23 +165,44 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
               value={value.customText}
               onChange={(e) => set('customText', e.target.value)}
             />
-            <p className="a2m-muted">1 行に 1 つ。書かなかったフィールドは接尾辞（{value.fieldSuffix}）を付けます。</p>
+            <p className="a2m-muted">
+              1 行に 1 つ。書かなかったフィールドは接尾辞（{value.fieldSuffix}）を付けます。
+            </p>
           </div>
         )}
         {value.fieldMode === 'same' && (
           <Alert variant="danger" className="a2m-note" role="note">
-            同名モードでは、メディアフィールドが表示時に <code>{'{fd}@path'}</code> を上書きするため、テンプレートを同時に差し替える必要があります。
+            同名モードでは、メディアフィールドが表示時に <code>{'{fd}@path'}</code>{' '}
+            を上書きするため、テンプレートを同時に差し替える必要があります。
             差し替えるまで、表示が壊れます。
           </Alert>
         )}
+        {value.fieldMode === 'same' && (
+          <Checkbox
+            label="旧キー（@path など）を削除する"
+            checked={value.removeLegacyKeys}
+            onChange={(e) => set('removeLegacyKeys', e.target.checked)}
+          />
+        )}
         <div className="a2m-block">
           <label htmlFor="a2m-include">対象にするフィールド名（空なら全部）</label>
-          <Input id="a2m-include" aria-label="対象にするフィールド名（空なら全部）" value={value.includeKeysText} onChange={(e) => set('includeKeysText', e.target.value)} />
+          <Input
+            id="a2m-include"
+            aria-label="対象にするフィールド名（空なら全部）"
+            value={value.includeKeysText}
+            onChange={(e) => set('includeKeysText', e.target.value)}
+          />
           <p className="a2m-muted">
-            検出済み: 画像 {definitions.fieldKeys.image.join(', ') || 'なし'} / ファイル {definitions.fieldKeys.file.join(', ') || 'なし'}
+            検出済み: 画像 {definitions.fieldKeys.image.join(', ') || 'なし'} / ファイル{' '}
+            {definitions.fieldKeys.file.join(', ') || 'なし'}
           </p>
           <label htmlFor="a2m-exclude">除外するフィールド名</label>
-          <Input id="a2m-exclude" aria-label="除外するフィールド名" value={value.excludeKeysText} onChange={(e) => set('excludeKeysText', e.target.value)} />
+          <Input
+            id="a2m-exclude"
+            aria-label="除外するフィールド名"
+            value={value.excludeKeysText}
+            onChange={(e) => set('excludeKeysText', e.target.value)}
+          />
         </div>
         <Checkbox
           label="フィールドグループの定義に追記する"
@@ -171,13 +213,30 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
 
       <Fieldset legend="オプション">
         <div className="a2m-checks a2m-checks--column">
-          <Checkbox label="リビジョンも変換する" checked={value.includeRevisions} onChange={(e) => set('includeRevisions', e.target.checked)} />
-          <Checkbox label="子ブログも含める" checked={value.includeChildBlogs} onChange={(e) => set('includeChildBlogs', e.target.checked)} />
-          <Checkbox label="新規メディアに alt・キャプションを設定する" checked={value.fillAltOnNew} onChange={(e) => set('fillAltOnNew', e.target.checked)} />
+          <Checkbox
+            label="リビジョンも変換する"
+            checked={value.includeRevisions}
+            onChange={(e) => set('includeRevisions', e.target.checked)}
+          />
+          <Checkbox
+            label="子ブログも含める"
+            checked={value.includeChildBlogs}
+            onChange={(e) => set('includeChildBlogs', e.target.checked)}
+          />
+          <Checkbox
+            label="新規メディアに alt・キャプションを設定する"
+            checked={value.fillAltOnNew}
+            onChange={(e) => set('fillAltOnNew', e.target.checked)}
+          />
         </div>
         <div className="a2m-inline">
           <label htmlFor="a2m-enlarged">拡大表示</label>
-          <Select id="a2m-enlarged" aria-label="拡大表示" value={value.enlarged} onChange={(e) => set('enlarged', e.target.value as Enlarged)}>
+          <Select
+            id="a2m-enlarged"
+            aria-label="拡大表示"
+            value={value.enlarged}
+            onChange={(e) => set('enlarged', e.target.value as Enlarged)}
+          >
             <option value="auto">自動（リンクが空で large 版があれば拡大）</option>
             <option value="yes">常に拡大する</option>
             <option value="no">拡大しない</option>
@@ -185,7 +244,12 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
         </div>
         <div className="a2m-inline">
           <label htmlFor="a2m-tags">新規メディアに付けるタグ</label>
-          <Input id="a2m-tags" aria-label="新規メディアに付けるタグ" value={value.tagsText} onChange={(e) => set('tagsText', e.target.value)} />
+          <Input
+            id="a2m-tags"
+            aria-label="新規メディアに付けるタグ"
+            value={value.tagsText}
+            onChange={(e) => set('tagsText', e.target.value)}
+          />
         </div>
       </Fieldset>
 
@@ -235,7 +299,8 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
         <ModalHeader>同名モードで実行します</ModalHeader>
         <ModalBody>
           <p>
-            同名モードでは、旧キー（<code>{'{fd}@path'}</code> など）を削除し、同じ名前のメディアフィールドに置き換えます。
+            同名モードでは、旧キー（<code>{'{fd}@path'}</code>{' '}
+            など）を削除し、同じ名前のメディアフィールドに置き換えます。
             テンプレートを同時に差し替えないと、表示が壊れます。ロールバックで元に戻せますが、ステージングでの確認を強くおすすめします。
           </p>
         </ModalBody>
