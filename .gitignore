@@ -2,21 +2,39 @@
 .vscode
 .idea
 
-# node
-node_modules
+# OS
+.DS_Store
+Thumbs.db
 
 # php
-vendor
-.phpunit.cache
+/vendor/
+.phpunit.cache/
+.phpunit.result.cache
 .phplint-cache
+/coverage/
+.phpstan.cache/
+/phpcs.xml
+/phpstan.neon
 
-# env (ローカルの認証情報など)
+# release artifacts (scripts/package.php output)
+/build/
+
+# node / frontend build output (built locally and in CI; the release zip bundles it)
+node_modules/
+/src/assets/dist/
+
+# env (local credentials etc.)
 .env
 .env.local
 .env.*.local
 
-# macOS
-.DS_Store
-
+# logs
 *.log
-build/
+
+# AI
+.claude/
+!.claude/skills
+.cursor/
+.codex/
+.gemini/
+*.local.md

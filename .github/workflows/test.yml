@@ -1,0 +1,91 @@
+name: Test
+
+on: [push, pull_request]
+
+# Boots a-blog cms + MySQL with the bundled docker-compose.yml and runs the checks inside the
+# container (the appleple/acms all-in-one image). The image tag encodes both versions as
+# {acms}-php{php}; the phpunit job sweeps that as a matrix via ACMS_IMAGE_TAG (read by
+# docker-compose.yml).
+#
+# Branch protection should require the aggregate "test" job below — not the individual matrix
+# cells — so adding a new a-blog cms version never means editing the ruleset.
+jobs:
+  # Version-range checks. phpcs (PHPCompatibility testVersion 8.1-8.5) and phpstan (phpVersion
+  # 8.1-8.5) analyse the whole range regardless of the runtime PHP, so they run once.
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Start a-blog cms + MySQL
+        run: docker compose up -d --wait
+
+      - name: Install dependencies
+        run: docker compose exec -T acms bash -lc "cd /workspace && composer install --no-interaction --no-progress"
+
+      - name: Coding standards (PHP_CodeSniffer)
+        run: docker compose exec -T acms bash -lc "cd /workspace && composer lint"
+
+      - name: Static analysis (PHPStan)
+        run: docker compose exec -T acms bash -lc "cd /workspace && composer analyse"
+
+      - name: Show a-blog cms logs on failure
+        if: failure()
+        run: docker compose logs acms
+
+  # Run PHPUnit against every supported PHP (and a-blog cms) version.
+  phpunit:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Add a-blog cms versions here as they land (e.g. '3.3', '3.4'). If a specific
+        # {acms}-php{php} image is not published, drop that combination with `exclude:`.
+        # ablogcms/testing-framework tracks the a-blog cms minor, so each cell pins it to
+        # {acms}.* below (assumes testing-framework {acms}.x matches a-blog cms {acms}).
+        acms: ['3.2']
+        php: ['8.1', '8.2', '8.3', '8.4', '8.5']
+    env:
+      ACMS_IMAGE_TAG: ${{ matrix.acms }}-php${{ matrix.php }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Start a-blog cms ${{ matrix.acms }} on PHP ${{ matrix.php }}
+        run: docker compose up -d --wait
+
+      # Install deps with the testing framework pinned to the a-blog cms version under test.
+      # `composer require` (rather than editing composer.json then `composer install`) applies the
+      # constraint whether or not a composer.lock is committed: plugins built from this archives_to_media
+      # typically commit their lock, and `install` would then install the locked version and ignore
+      # the freshly-changed constraint. matrix.acms is a trusted, workflow-defined value;
+      # single-quoted to avoid the shell globbing ".*".
+      - name: Install dependencies (testing-framework matched to a-blog cms ${{ matrix.acms }})
+        run: docker compose exec -T acms bash -lc "cd /workspace && composer require --dev --no-interaction --no-progress 'ablogcms/testing-framework:${{ matrix.acms }}.*'"
+
+      - name: Create the test database schema
+        # acms-create-database is a standalone CLI, so it does not read phpunit.xml's <env ACMS_ROOT>.
+        # Pass it explicitly — the all-in-one image's a-blog cms core lives at /var/www/html.
+        run: docker compose exec -T acms bash -lc "cd /workspace && ACMS_ROOT=/var/www/html vendor/bin/acms-create-database"
+
+      - name: Run PHPUnit
+        run: docker compose exec -T acms bash -lc "cd /workspace && vendor/bin/phpunit"
+
+      - name: Show a-blog cms logs on failure
+        if: failure()
+        run: docker compose logs acms
+
+  # Single required status check: green only when quality and every phpunit matrix cell passed.
+  # Keep this job id "test" so the existing branch-protection required check keeps matching.
+  test:
+    runs-on: ubuntu-latest
+    needs: [quality, phpunit]
+    if: always()
+    steps:
+      - name: Verify required jobs succeeded
+        run: |
+          echo "quality=${{ needs.quality.result }} phpunit=${{ needs.phpunit.result }}"
+          if [ "${{ needs.quality.result }}" != "success" ] || [ "${{ needs.phpunit.result }}" != "success" ]; then
+            echo "::error::A required job failed."
+            exit 1
+          fi
+          echo "All required jobs passed."

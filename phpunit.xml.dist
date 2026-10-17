@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<phpunit
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+  bootstrap="vendor/ablogcms/testing-framework/bootstrap.php"
+  colors="true"
+  cacheDirectory=".phpunit.cache"
+>
+  <testsuites>
+    <testsuite name="Unit">
+      <directory>tests/phpunit/Unit</directory>
+    </testsuite>
+    <testsuite name="Integration">
+      <directory>tests/phpunit/Integration</directory>
+    </testsuite>
+  </testsuites>
+  <source>
+    <include>
+      <directory>src</directory>
+    </include>
+  </source>
+  <php>
+    <!--
+      Root of the a-blog cms installation. Change this to match your environment
+      (inside Docker this is the container path). With the bundled docker-compose.yml
+      this is /var/www/html.
+    -->
+    <env name="ACMS_ROOT" value="/var/www/html"/>
+  </php>
+</phpunit>
