@@ -1,0 +1,14 @@
+{# 画面全体ではなく、admin-main に差し込む中身の断片だけを書く #}
+<header>
+  <div>
+    @include("/admin/topicpath.html")
+  </div>
+  <div>
+    <h1 class="acms-admin-admin-title js-dialog-title">アーカイブ → メディア変換</h1>
+  </div>
+</header>
+
+<div id="a2m-root" class="a2m-root">
+  <noscript>この画面を使うには JavaScript を有効にしてください。</noscript>
+</div>
+<script type="application/json" id="a2m-bootstrap">{{ bootstrap_json|raw }}</script>
