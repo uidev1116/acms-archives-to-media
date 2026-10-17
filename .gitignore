@@ -1,0 +1,22 @@
+# editor
+.vscode
+.idea
+
+# node
+node_modules
+
+# php
+vendor
+.phpunit.cache
+.phplint-cache
+
+# env (ローカルの認証情報など)
+.env
+.env.local
+.env.*.local
+
+# macOS
+.DS_Store
+
+*.log
+build/
