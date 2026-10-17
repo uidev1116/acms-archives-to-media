@@ -6,7 +6,7 @@
 
 - 1 タスク = 1 コミット（意味のある単位）。各段階の終わりで push（force push はしない）。
 - 各段階でテスト（Unit / Integration）を書いてから次へ進む。
-- 設計書からの変更点・安全側の判断は `docs/report.html` に集約する。
+- 設計書からの変更点・安全側の判断は `docs/report.md` に集約する。
 - コア（ablogcms/php 等）と親リポジトリは変更しない。
 
 ## 1. 準備
@@ -63,5 +63,5 @@
 
 - [ ] a2m-test を未変換状態に戻す
 - [ ] 親ブログのデータが変わっていないことを確認
-- [ ] `docs/report.html` を作成して push
+- [ ] `docs/report.md` を作成して push
 - [ ] `git status` クリーン / origin/main と一致
