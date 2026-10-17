@@ -38,3 +38,6 @@ node_modules/
 .codex/
 .gemini/
 *.local.md
+
+# docs: only Markdown is committed (HTML is for local viewing)
+docs/*.html
