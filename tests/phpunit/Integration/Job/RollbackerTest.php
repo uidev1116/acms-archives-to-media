@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Tests\Integration\Job;
 
+use Acms\Services\Common\Lock;
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Item;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\ItemStatus;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Job;
@@ -152,7 +154,7 @@ final class RollbackerTest extends A2mTestCase
         $this->assertNotSame([], $created);
 
         // 1 つだけ競合させ、その参照先メディアは消えないようにする
-        $conflictMedia = (int) $this->columnRow('u1')['column_field_1'];
+        $conflictMedia = Cast::int($this->columnRow('u1')['column_field_1']);
         $this->db->exec('UPDATE ' . $this->db->t('column') . ' SET column_field_2 = ? WHERE column_id = ?', ['編集後', 'u1']);
 
         $this->rollbacker()->rollbackChunk($this->job($jobId), true);
@@ -221,6 +223,7 @@ final class RollbackerTest extends A2mTestCase
         $this->seed();
         $jobId = $this->convertedJob();
         $held = ($this->lockFactory())();
+        $this->assertInstanceOf(Lock::class, $held);
         $this->assertTrue($held->tryLock());
         try {
             $this->rollbacker()->rollbackChunk($this->job($jobId), false);

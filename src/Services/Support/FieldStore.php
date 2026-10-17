@@ -59,7 +59,7 @@ class FieldStore
      */
     public function onlyKeys(array $rows, string $key): array
     {
-        return array_values(array_filter($rows, static fn (array $r): bool => (string) $r['field_key'] === $key));
+        return array_values(array_filter($rows, static fn (array $r): bool => Cast::str($r['field_key']) === $key));
     }
 
     /**
@@ -70,8 +70,8 @@ class FieldStore
     public function valueOf(array $rows, string $key): ?string
     {
         foreach ($rows as $row) {
-            if ((string) $row['field_key'] === $key) {
-                return $row['field_value'] === null ? null : (string) $row['field_value'];
+            if (Cast::str($row['field_key']) === $key) {
+                return $row['field_value'] === null ? null : Cast::str($row['field_value']);
             }
         }
         return null;
@@ -160,7 +160,7 @@ class FieldStore
                 $where[] = $column . ' IS NULL';
             } else {
                 $where[] = $column . ' = ?';
-                $params[] = (string) $v;
+                $params[] = Cast::str($v);
             }
         }
         $this->db->exec(

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Services\Job;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Converter\ConverterInterface;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Candidate;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\ItemStatus;
@@ -80,7 +81,8 @@ class ScanCoordinator
         if ($done) {
             $this->jobs->setStatus($job->id, JobStatus::Scanned);
         }
-        $total = (int) ($this->jobs->find($job->id)?->total ?? 0);
+        $fresh = $this->jobs->find($job->id);
+        $total = $fresh === null ? 0 : $fresh->total;
 
         return [
             'status' => ($done ? JobStatus::Scanned : JobStatus::Scanning)->value,
@@ -138,7 +140,7 @@ class ScanCoordinator
         }
 
         $unique = array_unique($previews);
-        $preview = count($unique) === 1 ? (string) $unique[0] : 'mixed';
+        $preview = count($unique) === 1 ? Cast::str($unique[0]) : 'mixed';
         $this->items->insert($job->id, $candidate, $preview, $before);
     }
 
@@ -161,6 +163,6 @@ class ScanCoordinator
         if (!is_array($data) || !isset($data['s'])) {
             return [0, null];
         }
-        return [(int) $data['s'], isset($data['c']) ? (string) $data['c'] : null];
+        return [Cast::int($data['s']), isset($data['c']) ? Cast::str($data['c']) : null];
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Services\Job;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Converter\ConversionSkipException;
 use Acms\Plugins\ArchivesToMedia\Services\Converter\ConverterInterface;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Candidate;
@@ -191,7 +192,7 @@ class JobRunner
             }
             $this->cache->collect($item->locator, $item->blogId);
 
-            return ['status' => 'converted', 'reason' => $warning?->value ?? '', 'message' => $warning?->label() ?? ''];
+            return ['status' => 'converted', 'reason' => $warning === null ? '' : $warning->value, 'message' => $warning === null ? '' : $warning->label()];
         } catch (SourceException $e) {
             return $this->fail($item, ItemStatus::Skipped, $e->reason, $e->getMessage());
         } catch (ConversionSkipException $e) {
@@ -253,7 +254,7 @@ class JobRunner
             if ($mediaId <= 0 || ($newFlags[$i] ?? true) || $alt === '') {
                 continue;
             }
-            $current = (string) $this->db->one('SELECT media_field_3 FROM ' . $this->db->t('media') . ' WHERE media_id = ?', [$mediaId]);
+            $current = Cast::str($this->db->one('SELECT media_field_3 FROM ' . $this->db->t('media') . ' WHERE media_id = ?', [$mediaId]));
             if ($current !== $alt) {
                 return ReasonCode::AltMismatch;
             }

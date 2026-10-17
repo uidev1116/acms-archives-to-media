@@ -87,7 +87,7 @@ final class JobOptions
             throw new \InvalidArgumentException('unitTypeMap が不正です。');
         }
         foreach ($rawMap as $from => $to) {
-            if (!is_string($to) || !preg_match('/^(image|file)(_\d+)?$/', (string) $from) || !preg_match('/^media(_\d+)?$/', $to)) {
+            if (!is_string($to) || preg_match('/^(image|file)(_\d+)?$/', (string) $from) !== 1 || preg_match('/^media(_\d+)?$/', $to) !== 1) {
                 throw new \InvalidArgumentException('ユニット種類のマッピングが不正です。');
             }
             $unitTypeMap[(string) $from] = $to;
@@ -102,7 +102,7 @@ final class JobOptions
             throw new \InvalidArgumentException('フィールドの書き込み先モードが不正です。');
         }
         $suffix = $field['suffix'] ?? '_media';
-        if (!is_string($suffix) || !preg_match('/^[A-Za-z0-9_\-]{1,32}$/', $suffix)) {
+        if (!is_string($suffix) || preg_match('/^[A-Za-z0-9_\-]{1,32}$/', $suffix) !== 1) {
             throw new \InvalidArgumentException('フィールド名の接尾辞が不正です。');
         }
         $custom = [];

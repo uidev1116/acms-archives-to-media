@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Services\Converter;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\JobOptions;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Locator\ColumnLocator;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Locator\LocatorInterface;
@@ -34,7 +35,9 @@ abstract class AbstractUnitConverter implements ConverterInterface
         if (!Snapshot::equals(Snapshot::normalizeRow($current), $after['row'])) {
             throw new ConflictException('変換後にユニットが編集されています。');
         }
-        $this->writeRow($locator, $before['row'], array_keys($current));
+        /** @var array<string, mixed> $beforeRow */
+        $beforeRow = $before['row'];
+        $this->writeRow($locator, $beforeRow, array_keys($current));
     }
 
     protected function requireColumn(LocatorInterface $locator): ColumnLocator
@@ -76,7 +79,7 @@ abstract class AbstractUnitConverter implements ConverterInterface
                 continue;
             }
             $sets[] = '`' . $column . '` = ?';
-            $params[] = $value === null ? null : (string) $value;
+            $params[] = Cast::nullableStr($value);
         }
         if ($sets === []) {
             return;

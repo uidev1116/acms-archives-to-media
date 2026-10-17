@@ -31,13 +31,22 @@ final class ArchivesFixture
         $this->rm($this->dir);
     }
 
+    /**
+     * @return list<string>
+     */
+    private function entries(string $path): array
+    {
+        $list = scandir($path);
+        return $list === false ? [] : $list;
+    }
+
     private function rm(string $path): void
     {
         if (is_link($path) || is_file($path)) {
             unlink($path);
             return;
         }
-        foreach (scandir($path) ?: [] as $f) {
+        foreach ($this->entries($path) as $f) {
             if ($f !== '.' && $f !== '..') {
                 $this->rm($path . '/' . $f);
             }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Services\Converter;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Candidate;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\JobOptions;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\TargetType;
@@ -28,7 +29,7 @@ class UnitFileConverter extends AbstractUnitConverter
     {
         $row = $this->requireRow($candidate->locator);
         $count = count($candidate->sourcePaths);
-        $captions = UnitData::pad(UnitData::explode((string) $row['column_field_1']), $count);
+        $captions = UnitData::pad(UnitData::explode(Cast::str($row['column_field_1'])), $count);
         $metas = [];
         for ($i = 0; $i < $count; $i++) {
             $metas[] = new MediaMeta('', $captions[$i], $options->fillAltOnNew, $options->tags, '', false);
@@ -40,10 +41,10 @@ class UnitFileConverter extends AbstractUnitConverter
     {
         $row = $this->requireRow($candidate->locator);
         $count = count($mediaIds);
-        $captions = UnitData::pad(UnitData::explode((string) $row['column_field_1']), $count);
+        $captions = UnitData::pad(UnitData::explode(Cast::str($row['column_field_1'])), $count);
 
         $values = [
-            'column_type' => $options->mediaUnitTypeFor((string) $row['column_type']),
+            'column_type' => $options->mediaUnitTypeFor(Cast::str($row['column_type'])),
             'column_field_1' => UnitData::implode(array_map(static fn (int $m): string => $m > 0 ? (string) $m : '', $mediaIds)),
             'column_field_2' => UnitData::implode($captions),
             'column_field_3' => '',

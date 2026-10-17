@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Services\Scanner;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Converter\FieldNameResolver;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\TargetType;
 
@@ -25,7 +26,7 @@ class FieldFileScanner extends AbstractFieldScanner
         $hasBaseName = false;
         $hasX = false;
         foreach ($rows as $row) {
-            $key = (string) $row['field_key'];
+            $key = Cast::str($row['field_key']);
             if ($key === $fd . '@baseName') {
                 $hasBaseName = true;
             }

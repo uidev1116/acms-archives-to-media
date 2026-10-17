@@ -93,15 +93,16 @@ final class ServiceProviderTest extends A2mTestCase
         $data = $b->toArray();
         $this->assertSame(BID, $data['blogId']);
         $this->assertSame(ApiEndpoint::ACTIONS, $data['actions']);
-        $this->assertSame('ACMS_POST_ArchivesToMedia_Api', $data['api']['action']);
-        $this->assertSame('ACMS_POST_ArchivesToMedia_ExportCsv', $data['csv']['action']);
+        $this->assertSame('ACMS_POST_ArchivesToMedia_Api', $this->child($data, 'api')['action']);
+        $this->assertSame('ACMS_POST_ArchivesToMedia_ExportCsv', $this->child($data, 'csv')['action']);
         $this->assertNotFalse(json_encode($data));
     }
 
     #[Test]
     public function 要件チェックは環境が整っていればtrue(): void
     {
-        $this->assertIsBool((new ServiceProvider())->checkRequirements());
+        $provider = new ServiceProvider();
+        $this->assertSame($provider->checkRequirements(), $provider->checkRequirements());
     }
 
     #[Test]

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Acms\Plugins\ArchivesToMedia\Tests\Integration;
 
 use Acms\Plugins\ArchivesToMedia\ServiceProvider;
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Support\Db;
 use Acms\Plugins\ArchivesToMedia\Services\Support\Schema;
 use Acms\TestingFramework\TestCase;
@@ -18,7 +19,7 @@ final class ServiceProviderInstallTest extends TestCase
     private function tableExists(string $table): bool
     {
         $db = new Db();
-        return (int) $db->one('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?', [DB_PREFIX . $table]) === 1;
+        return Cast::int($db->one('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?', [DB_PREFIX . $table])) === 1;
     }
 
     #[Test]

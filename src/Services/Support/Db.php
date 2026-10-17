@@ -32,7 +32,7 @@ class Db
             throw new \RuntimeException('DB query failed.');
         }
         /** @var list<array<string, mixed>> $rows */
-        return array_values($rows);
+        return $rows;
     }
 
     /**
@@ -74,7 +74,7 @@ class Db
 
     public function lastInsertId(): int
     {
-        return (int) Database::query('SELECT LAST_INSERT_ID()', 'one');
+        return Cast::int(Database::query('SELECT LAST_INSERT_ID()', 'one'));
     }
 
     public function begin(): void

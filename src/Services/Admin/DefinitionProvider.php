@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Services\Admin;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Support\BlogScope;
 use Acms\Plugins\ArchivesToMedia\Services\Support\Db;
 
@@ -52,7 +53,7 @@ class DefinitionProvider
         $base = [];
         $x = [];
         foreach ($keys as $row) {
-            $key = (string) $row['field_key'];
+            $key = Cast::str($row['field_key']);
             $fd = substr($key, 0, (int) strrpos($key, '@'));
             match (substr($key, (int) strrpos($key, '@') + 1)) {
                 'path' => $paths[$fd] = true,
@@ -64,9 +65,9 @@ class DefinitionProvider
         $file = [];
         foreach (array_keys($paths) as $fd) {
             if (isset($base[$fd]) && !isset($x[$fd])) {
-                $file[] = (string) $fd;
+                $file[] = $fd;
             } else {
-                $image[] = (string) $fd;
+                $image[] = $fd;
             }
         }
         sort($image);
@@ -74,7 +75,7 @@ class DefinitionProvider
 
         return [
             'mediaUnitTypes' => $media === [] ? ['media'] : $media,
-            'sourceUnitTypes' => array_map(static fn (array $r): array => ['type' => (string) $r['column_type'], 'count' => (int) $r['c']], $types),
+            'sourceUnitTypes' => array_map(static fn (array $r): array => ['type' => Cast::str($r['column_type']), 'count' => Cast::int($r['c'])], $types),
             'fieldKeys' => ['image' => $image, 'file' => $file],
         ];
     }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Services\Converter;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Candidate;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\JobOptions;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Locator\FieldLocator;
@@ -69,14 +70,14 @@ class FieldMediaConverter implements ConverterInterface
 
         $rows = $this->store->family($loc, $fd);
         $pathRow = $this->firstRow($rows, $fd . '@path');
-        if ($pathRow === null || trim((string) $pathRow['field_value']) === '') {
+        if ($pathRow === null || trim(Cast::str($pathRow['field_value'])) === '') {
             throw new ConversionSkipException(ReasonCode::StaleSnapshot, '元のパスが見つかりません。');
         }
 
         $sameMode = $dest === $fd;
         if ($sameMode) {
             $mediaRow = $this->firstRow($rows, $fd . '@media');
-            if ($mediaRow !== null && trim((string) $mediaRow['field_value']) !== '') {
+            if ($mediaRow !== null && trim(Cast::str($mediaRow['field_value'])) !== '') {
                 throw new ConversionSkipException(ReasonCode::DestConflict, '既にメディアフィールドです。');
             }
         } elseif ($this->store->family($loc, $dest) !== []) {
@@ -84,7 +85,7 @@ class FieldMediaConverter implements ConverterInterface
         }
 
         $baseRow = $this->firstRow($rows, $fd);
-        $search = $baseRow !== null ? (string) $baseRow['field_search'] : 'on';
+        $search = $baseRow !== null ? Cast::str($baseRow['field_search']) : 'on';
 
         if ($sameMode) {
             if ($options->removeLegacyKeys) {
@@ -141,6 +142,7 @@ class FieldMediaConverter implements ConverterInterface
         }
         foreach ($beforeRows as $row) {
             if (is_array($row)) {
+                /** @var array<string, mixed> $row */
                 $this->store->insertRow($loc->table(), $row);
             }
         }
@@ -148,6 +150,7 @@ class FieldMediaConverter implements ConverterInterface
         if (is_array($groupAdded)) {
             foreach ($groupAdded as $row) {
                 if (is_array($row)) {
+                    /** @var array<string, mixed> $row */
                     $this->store->deleteExact($loc->table(), $row);
                 }
             }
@@ -177,7 +180,7 @@ class FieldMediaConverter implements ConverterInterface
     private function firstRow(array $rows, string $key): ?array
     {
         foreach ($rows as $row) {
-            if ((string) $row['field_key'] === $key) {
+            if (Cast::str($row['field_key']) === $key) {
                 return $row;
             }
         }

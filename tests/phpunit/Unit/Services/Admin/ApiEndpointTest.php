@@ -15,6 +15,9 @@ use PHPUnit\Framework\Attributes\Test;
 
 final class ApiEndpointTest extends TestCase
 {
+    /**
+     * @param array<string, mixed> $returns
+     */
     private function endpoint(?\Throwable $throws = null, array $returns = ['ok' => true]): ApiEndpoint
     {
         $api = $this->createMock(AdminApi::class);

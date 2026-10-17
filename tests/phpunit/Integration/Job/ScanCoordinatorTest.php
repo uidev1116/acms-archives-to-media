@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Tests\Integration\Job;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Converter\FieldNameResolver;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\ItemStatus;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\JobOptions;
@@ -38,6 +39,9 @@ final class ScanCoordinatorTest extends A2mTestCase
         );
     }
 
+    /**
+     * @param array<string, mixed> $options
+     */
     private function newJob(array $options = []): int
     {
         return $this->jobs()->create($this->blogId, 1, JobOptions::fromArray($options + ['chunkSize' => 2]));
@@ -85,8 +89,8 @@ final class ScanCoordinatorTest extends A2mTestCase
         $this->assertSame(5, $res['total']);
         $job = $this->jobs()->find($jobId);
         $this->assertSame(JobStatus::Scanned, $job?->status);
-        $this->assertSame(5, $job?->total);
-        $this->assertNull($job?->scanCursor);
+        $this->assertSame(5, $job->total);
+        $this->assertNull($job->scanCursor);
 
         $byStatus = $this->items()->countByStatus($jobId);
         $this->assertSame(['pending' => 4, 'skipped' => 1], $byStatus);
@@ -110,7 +114,7 @@ final class ScanCoordinatorTest extends A2mTestCase
         $this->assertSame([], $this->media->registered);
         $this->assertEquals($columns, $this->db->all('SELECT * FROM ' . $this->db->t('column') . ' WHERE column_entry_id = ? ORDER BY column_id', [$this->entryId]));
         $this->assertEquals($fields, $this->fieldRows());
-        $this->assertSame('0', (string) $this->db->one('SELECT COUNT(*) FROM ' . $this->db->t('a2m_path_map')));
+        $this->assertSame('0', Cast::str($this->db->one('SELECT COUNT(*) FROM ' . $this->db->t('a2m_path_map'))));
     }
 
     #[Test]
@@ -191,6 +195,7 @@ final class ScanCoordinatorTest extends A2mTestCase
         $jobId = $this->newJob(['chunkSize' => 1]);
 
         $job = $this->jobs()->find($jobId);
+        $this->assertNotNull($job);
         $first = $this->coordinator()->scanChunk($job);
         $this->assertFalse($first['done']);
         $this->assertSame(JobStatus::Scanning->value, $first['status']);
@@ -229,7 +234,7 @@ final class ScanCoordinatorTest extends A2mTestCase
 
         $this->jobs()->setOptions($jobId, JobOptions::fromArray(['targets' => ['unit_image'], 'chunkSize' => 2]));
         $this->coordinator()->reset($this->jobs()->find($jobId) ?? throw new \RuntimeException());
-        $this->assertSame(JobStatus::Draft, $this->jobs()->find($jobId)?->status);
+        $this->assertSame(JobStatus::Draft, $this->jobs()->find($jobId)->status);
         $this->assertSame([], $this->items()->countByStatus($jobId));
 
         $res = $this->scanAll($jobId);

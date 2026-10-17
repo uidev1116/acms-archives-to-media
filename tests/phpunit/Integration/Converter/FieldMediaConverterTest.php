@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Tests\Integration\Converter;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Converter\ConflictException;
 use Acms\Plugins\ArchivesToMedia\Services\Converter\ConversionSkipException;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Candidate;
@@ -34,7 +35,7 @@ final class FieldMediaConverterTest extends A2mTestCase
     {
         $out = [];
         foreach ($this->fieldRows($like) as $r) {
-            $out[(string) $r['field_key'] . '#' . $r['field_sort']] = (string) $r['field_value'];
+            $out[Cast::str($r['field_key']) . '#' . Cast::str($r['field_sort'])] = Cast::str($r['field_value']);
         }
         return $out;
     }
@@ -57,9 +58,11 @@ final class FieldMediaConverterTest extends A2mTestCase
         $this->assertSame([null, 'media'], array_map(static fn ($r) => $r['field_type'], $types));
         $this->assertSame('on', $types[0]['field_search']);
         $this->assertSame('off', $types[1]['field_search']);
-        $this->assertSame((string) $this->blogId, (string) $types[0]['field_blog_id']);
-        $this->assertSame((string) $this->entryId, (string) $types[1]['field_eid']);
-        $this->assertCount(2, array_filter($after['rows'], static fn ($r) => str_starts_with((string) $r['field_key'], 'hero_media')));
+        $this->assertSame((string) $this->blogId, Cast::str($types[0]['field_blog_id']));
+        $this->assertSame((string) $this->entryId, Cast::str($types[1]['field_eid']));
+        $rows = $after['rows'];
+        $this->assertIsArray($rows);
+        $this->assertCount(2, array_filter($rows, static fn ($r): bool => is_array($r) && str_starts_with(Cast::str($r['field_key'] ?? ''), 'hero_media')));
     }
 
     #[Test]
@@ -116,8 +119,9 @@ final class FieldMediaConverterTest extends A2mTestCase
 
         $groups = $this->db->all('SELECT field_value, field_sort FROM ' . $this->db->t('field') . ' WHERE field_eid = ? AND field_key = \'@news\' ORDER BY field_sort', [$this->entryId]);
         $this->assertSame(['title', 'hero', 'body', 'hero_media'], array_map(static fn ($r) => $r['field_value'], $groups));
-        $this->assertSame('4', (string) $groups[3]['field_sort']);
+        $this->assertSame('4', Cast::str($groups[3]['field_sort']));
         $this->assertCount(1, $this->db->all('SELECT 1 FROM ' . $this->db->t('field') . ' WHERE field_key = \'@other\' AND field_eid = ?', [$this->entryId]));
+        $this->assertIsArray($after['groupAdded']);
         $this->assertCount(1, $after['groupAdded']);
     }
 
@@ -247,7 +251,7 @@ final class FieldMediaConverterTest extends A2mTestCase
         $this->assertSame([], $this->fieldRows('hero\\_media%'));
         $rev = $this->db->all('SELECT field_key, field_rev_id FROM ' . $this->db->t('field_rev') . ' WHERE field_eid = ? AND field_key LIKE \'hero\\_media%\'', [$this->entryId]);
         $this->assertCount(2, $rev);
-        $this->assertSame('3', (string) $rev[0]['field_rev_id']);
+        $this->assertSame('3', Cast::str($rev[0]['field_rev_id']));
     }
 
     #[Test]

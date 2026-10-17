@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Services\Repository;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Candidate;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Item;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\ItemStatus;
@@ -48,7 +49,7 @@ class ItemRepository
                 json_encode($candidate->sourcePaths, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
                 $preview,
                 $status->value,
-                $reason?->value ?? '',
+                $reason === null ? '' : $reason->value,
                 $message,
                 json_encode($before, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
                 $candidate->blogId,
@@ -101,7 +102,7 @@ class ItemRepository
                 ItemStatus::Converted->value,
                 implode(',', $mediaIds),
                 json_encode($after, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
-                $warning?->value ?? '',
+                $warning === null ? '' : $warning->value,
                 $message,
                 date('Y-m-d H:i:s'),
                 $id,
@@ -113,7 +114,7 @@ class ItemRepository
     {
         $this->db->exec(
             'UPDATE ' . $this->db->t('a2m_item') . ' SET item_status = ?, item_reason = ?, item_message = ?, item_updated_datetime = ? WHERE item_id = ?',
-            [$status->value, $reason?->value ?? '', $message, date('Y-m-d H:i:s'), $id]
+            [$status->value, $reason === null ? '' : $reason->value, $message, date('Y-m-d H:i:s'), $id]
         );
     }
 
@@ -199,7 +200,7 @@ class ItemRepository
         );
         $out = [];
         foreach ($rows as $row) {
-            $out[(string) $row['item_status']] = (int) $row['c'];
+            $out[Cast::str($row['item_status'])] = Cast::int($row['c']);
         }
         return $out;
     }
@@ -217,11 +218,11 @@ class ItemRepository
             [$jobId]
         );
         return array_map(static fn (array $r): array => [
-            'target' => (string) $r['item_target'],
-            'status' => (string) $r['item_status'],
-            'preview' => (string) $r['item_preview'],
-            'reason' => (string) $r['item_reason'],
-            'count' => (int) $r['c'],
+            'target' => Cast::str($r['item_target']),
+            'status' => Cast::str($r['item_status']),
+            'preview' => Cast::str($r['item_preview']),
+            'reason' => Cast::str($r['item_reason']),
+            'count' => Cast::int($r['c']),
         ], $rows);
     }
 
@@ -244,7 +245,7 @@ class ItemRepository
              FROM ' . $this->db->t('a2m_item') . ' WHERE ' . $where . ' ORDER BY ' . $order . ($desc ? ' DESC' : ' ASC') . ', item_id ASC LIMIT ' . $perPage . ' OFFSET ' . $offset,
             $params
         );
-        $total = (int) $this->db->one('SELECT COUNT(*) FROM ' . $this->db->t('a2m_item') . ' WHERE ' . $where, $params);
+        $total = Cast::int($this->db->one('SELECT COUNT(*) FROM ' . $this->db->t('a2m_item') . ' WHERE ' . $where, $params));
         return ['items' => $rows, 'total' => $total];
     }
 
@@ -276,7 +277,8 @@ class ItemRepository
         }
         if (isset($filters['q']) && $filters['q'] !== '') {
             $where .= ' AND item_source_paths LIKE ?';
-            $params[] = '%' . $this->db->escapeLike(trim(json_encode($filters['q'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '', '"')) . '%';
+            $encoded = json_encode($filters['q'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $params[] = '%' . $this->db->escapeLike(trim($encoded === false ? '' : $encoded, '"')) . '%';
         }
         return [$where, $params];
     }

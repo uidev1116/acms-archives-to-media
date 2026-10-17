@@ -22,9 +22,18 @@ final class SourcePathSelectorTest extends TestCase
         mkdir($this->dir . '001/202401', 0777, true);
     }
 
+    /**
+     * @return list<string>
+     */
+    private function files(): array
+    {
+        $found = glob($this->dir . '001/202401/*');
+        return $found === false ? [] : $found;
+    }
+
     protected function tearDown(): void
     {
-        foreach (glob($this->dir . '001/202401/*') ?: [] as $f) {
+        foreach ($this->files() as $f) {
             unlink($f);
         }
         rmdir($this->dir . '001/202401');

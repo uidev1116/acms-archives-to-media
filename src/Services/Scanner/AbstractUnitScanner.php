@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Services\Scanner;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Candidate;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\JobOptions;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Locator\ColumnLocator;
@@ -47,8 +48,8 @@ abstract class AbstractUnitScanner implements ScannerInterface
                     break;
                 }
                 foreach ($rows as $row) {
-                    $lastId = (string) $row['column_id'];
-                    $lastRev = (int) ($row['column_rev_id'] ?? 0);
+                    $lastId = Cast::str($row['column_id']);
+                    $lastRev = Cast::int($row['column_rev_id'] ?? 0);
                     $candidate = $this->toCandidate($table, $row);
                     if ($candidate !== null) {
                         $candidates[] = $candidate;
@@ -103,21 +104,21 @@ abstract class AbstractUnitScanner implements ScannerInterface
      */
     private function toCandidate(string $table, array $row): ?Candidate
     {
-        $type = (string) $row['column_type'];
+        $type = Cast::str($row['column_type']);
         if (preg_match($this->typeRegex(), $type) !== 1) {
             return null;
         }
-        $paths = UnitData::explode((string) $row['column_field_2']);
+        $paths = UnitData::explode(Cast::str($row['column_field_2']));
         if (count(array_filter($paths, static fn (string $p): bool => $p !== '')) === 0) {
             return null;
         }
-        $rev = $table === 'column_rev' ? (int) $row['column_rev_id'] : null;
+        $rev = $table === 'column_rev' ? Cast::int($row['column_rev_id']) : null;
         return new Candidate(
             $this->target(),
-            new ColumnLocator((string) $row['column_id'], $rev),
+            new ColumnLocator(Cast::str($row['column_id']), $rev),
             'entry',
-            (int) $row['column_entry_id'],
-            (int) $row['column_blog_id'],
+            Cast::int($row['column_entry_id']),
+            Cast::int($row['column_blog_id']),
             $paths,
             [],
             ['unitType' => $type],
@@ -133,7 +134,7 @@ abstract class AbstractUnitScanner implements ScannerInterface
         if (!is_array($data) || !isset($data['t'], $data['id']) || !in_array($data['t'], ['column', 'column_rev'], true)) {
             return ['t' => 'column', 'id' => '', 'rev' => 0];
         }
-        return ['t' => (string) $data['t'], 'id' => (string) $data['id'], 'rev' => (int) ($data['rev'] ?? 0)];
+        return ['t' => Cast::str($data['t']), 'id' => Cast::str($data['id']), 'rev' => Cast::int($data['rev'] ?? 0)];
     }
 
     private function encode(string $table, string $id, int $rev): string

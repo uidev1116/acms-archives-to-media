@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Services\Domain;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
+
 final class Job
 {
     public function __construct(
@@ -30,20 +32,20 @@ final class Job
     public static function fromRow(array $row): self
     {
         return new self(
-            (int) $row['job_id'],
-            JobStatus::from((string) $row['job_status']),
-            JobOptions::fromJson((string) $row['job_options']),
-            (int) $row['job_total'],
-            (int) $row['job_converted'],
-            (int) $row['job_skipped'],
-            (int) $row['job_error'],
-            $row['job_scan_cursor'] === null ? null : (string) $row['job_scan_cursor'],
-            $row['job_message'] === null ? null : (string) $row['job_message'],
-            (int) $row['job_user_id'],
-            (int) $row['job_blog_id'],
-            (string) $row['job_created_datetime'],
-            $row['job_started_datetime'] === null ? null : (string) $row['job_started_datetime'],
-            $row['job_finished_datetime'] === null ? null : (string) $row['job_finished_datetime'],
+            Cast::int($row['job_id']),
+            JobStatus::from(Cast::str($row['job_status'])),
+            JobOptions::fromJson(Cast::str($row['job_options'])),
+            Cast::int($row['job_total']),
+            Cast::int($row['job_converted']),
+            Cast::int($row['job_skipped']),
+            Cast::int($row['job_error']),
+            $row['job_scan_cursor'] === null ? null : Cast::str($row['job_scan_cursor']),
+            $row['job_message'] === null ? null : Cast::str($row['job_message']),
+            Cast::int($row['job_user_id']),
+            Cast::int($row['job_blog_id']),
+            Cast::str($row['job_created_datetime']),
+            $row['job_started_datetime'] === null ? null : Cast::str($row['job_started_datetime']),
+            $row['job_finished_datetime'] === null ? null : Cast::str($row['job_finished_datetime']),
         );
     }
 

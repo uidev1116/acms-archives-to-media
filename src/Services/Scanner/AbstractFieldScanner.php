@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Services\Scanner;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Converter\FieldNameResolver;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Candidate;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\JobOptions;
@@ -68,7 +69,7 @@ abstract class AbstractFieldScanner implements ScannerInterface
                     break;
                 }
                 foreach ($rows as $row) {
-                    $last = (string) $row['sk'];
+                    $last = Cast::str($row['sk']);
                     $candidate = $this->toCandidate($table, $row, $options);
                     if ($candidate !== null) {
                         $candidates[] = $candidate;
@@ -136,7 +137,7 @@ abstract class AbstractFieldScanner implements ScannerInterface
      */
     private function toCandidate(string $table, array $row, JobOptions $options): ?Candidate
     {
-        $key = (string) $row['field_key'];
+        $key = Cast::str($row['field_key']);
         $fd = substr($key, 0, -5);
         if ($fd === '' || !JobOptions::isFieldName($fd) || !$this->names->isTarget($fd, $options)) {
             return null;
@@ -146,7 +147,7 @@ abstract class AbstractFieldScanner implements ScannerInterface
         foreach (FieldLocator::OWNER_COLUMNS as $col) {
             if (isset($row['field_' . $col]) && $row['field_' . $col] !== '') {
                 $ownerColumn = $col;
-                $ownerId = $col === 'unit_id' ? (string) $row['field_unit_id'] : (int) $row['field_' . $col];
+                $ownerId = $col === 'unit_id' ? Cast::str($row['field_unit_id']) : Cast::int($row['field_' . $col]);
                 break;
             }
         }
@@ -155,11 +156,11 @@ abstract class AbstractFieldScanner implements ScannerInterface
         }
         $locator = new FieldLocator(
             $fd,
-            (int) $row['field_sort'],
+            Cast::int($row['field_sort']),
             $ownerColumn,
             $ownerId,
-            $table === 'field_rev' ? (int) $row['field_rev_id'] : null,
-            (int) $row['field_blog_id'],
+            $table === 'field_rev' ? Cast::int($row['field_rev_id']) : null,
+            Cast::int($row['field_blog_id']),
         );
         $rows = $this->store->family($locator, $fd);
         if (!$this->accepts($rows, $fd)) {
@@ -180,8 +181,8 @@ abstract class AbstractFieldScanner implements ScannerInterface
             $locator,
             $locator->ownerType(),
             $ownerId,
-            (int) $row['field_blog_id'],
-            [(string) $row['field_value']],
+            Cast::int($row['field_blog_id']),
+            [Cast::str($row['field_value'])],
             [],
             ['conflict' => $conflict],
         );
@@ -196,6 +197,6 @@ abstract class AbstractFieldScanner implements ScannerInterface
         if (!is_array($data) || !isset($data['t'], $data['sk']) || !in_array($data['t'], ['field', 'field_rev'], true)) {
             return ['t' => 'field', 'sk' => ''];
         }
-        return ['t' => (string) $data['t'], 'sk' => (string) $data['sk']];
+        return ['t' => Cast::str($data['t']), 'sk' => Cast::str($data['sk'])];
     }
 }

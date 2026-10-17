@@ -185,13 +185,27 @@ abstract class A2mTestCase extends DatabaseTestCase
         $this->fail('scan did not finish');
     }
 
+    /**
+     * 配列の子要素（配列）を型付きで取り出す
+     *
+     * @param array<string, mixed> $array
+     * @return array<string, mixed>
+     */
+    protected function child(array $array, string $key): array
+    {
+        $value = $array[$key] ?? null;
+        $this->assertIsArray($value);
+        /** @var array<string, mixed> $value */
+        return $value;
+    }
+
     protected function blogScope(): BlogScope
     {
         return new BlogScope($this->db);
     }
 
     /**
-     * @param array<string, string> $overrides
+     * @param array<string, scalar|null> $overrides
      */
     protected function insertColumn(string $id, string $type, array $overrides = [], ?int $entryId = null, ?int $blogId = null, ?int $rev = null): void
     {
@@ -266,6 +280,9 @@ abstract class A2mTestCase extends DatabaseTestCase
     /**
      * 画像フィールド（旧形式）を作る
      */
+    /**
+     * @param array<string, mixed> $overrides
+     */
     protected function insertImageField(string $fd, string $path, int $sort = 1, string $alt = '', array $overrides = [], ?int $rev = null): void
     {
         $this->insertField($fd, '', $sort, $overrides + ['field_search' => 'on'], $rev);
@@ -276,6 +293,9 @@ abstract class A2mTestCase extends DatabaseTestCase
         $this->insertField($fd . '@alt', $alt, $sort, $overrides, $rev);
     }
 
+    /**
+     * @param array<string, mixed> $overrides
+     */
     protected function insertFileField(string $fd, string $path, string $baseName, string $downloadName = '', int $sort = 1, array $overrides = []): void
     {
         $this->insertField($fd . '@path', $path, $sort, $overrides);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Services\Converter;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Locator\FieldLocator;
 use Acms\Plugins\ArchivesToMedia\Services\Support\FieldStore;
 
@@ -29,14 +30,14 @@ class FieldGroupAppender
         $added = [];
         $groups = [];
         foreach ($groupRows as $row) {
-            $groups[(string) $row['field_key']][] = $row;
+            $groups[Cast::str($row['field_key'])][] = $row;
         }
         foreach ($groups as $key => $rows) {
-            $values = array_map(static fn (array $r): string => (string) $r['field_value'], $rows);
+            $values = array_map(static fn (array $r): string => Cast::str($r['field_value']), $rows);
             if (!in_array($fd, $values, true) || in_array($dest, $values, true)) {
                 continue;
             }
-            $maxSort = max(array_map(static fn (array $r): int => (int) $r['field_sort'], $rows));
+            $maxSort = max(array_map(static fn (array $r): int => Cast::int($r['field_sort']), $rows));
             $new = $rows[0];
             $new['field_key'] = $key;
             $new['field_value'] = $dest;

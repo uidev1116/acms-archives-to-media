@@ -21,6 +21,7 @@ class AdminApi
      * @return array<string, mixed>
      * @throws \InvalidArgumentException 入力が不正
      * @throws \Acms\Plugins\ArchivesToMedia\Services\Job\JobNotFoundException
+     * @throws \Acms\Plugins\ArchivesToMedia\Services\Job\JobBusyException 同じブログで別の処理が実行中
      * @throws \LogicException 今の状態では実行できない操作
      */
     public function handle(string $action, array $input, int $blogId, int $userId): array

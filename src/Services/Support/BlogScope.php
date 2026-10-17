@@ -27,9 +27,9 @@ class BlogScope
         }
         $rows = $this->db->all(
             'SELECT blog_id FROM ' . $this->db->t('blog') . ' WHERE blog_left >= ? AND blog_right <= ? ORDER BY blog_left',
-            [(int) $row['blog_left'], (int) $row['blog_right']]
+            [Cast::int($row['blog_left']), Cast::int($row['blog_right'])]
         );
-        $ids = array_map(static fn (array $r): int => (int) $r['blog_id'], $rows);
+        $ids = array_map(static fn (array $r): int => Cast::int($r['blog_id']), $rows);
         return $ids === [] ? [$blogId] : $ids;
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use ACMS_App;
 use Acms\Plugins\ArchivesToMedia\Services\Admin\AdminApi;
 use Acms\Plugins\ArchivesToMedia\Services\Admin\AdminBootstrap;
@@ -289,7 +290,7 @@ class ServiceProvider extends ACMS_App
             new DefinitionProvider(
                 self::db(),
                 self::get('archives-to-media.blog-scope', BlogScope::class),
-                static fn (): array => array_values(array_map('strval', configArray('column_add_type'))),
+                static fn (): array => array_values(array_map(static fn (mixed $v): string => Cast::str($v), configArray('column_add_type'))),
             ),
         ));
         App::singleton('archives-to-media.api-endpoint', static fn () => new ApiEndpoint(
@@ -299,7 +300,7 @@ class ServiceProvider extends ACMS_App
         App::singleton('archives-to-media.admin-bootstrap', static fn () => new AdminBootstrap(
             BID,
             '0.1.0',
-            acmsLink(['bid' => BID, 'admin' => 'app_archives_to_media_index']),
+            Cast::str(acmsLink(['bid' => BID, 'admin' => 'app_archives_to_media_index'])),
         ));
     }
 

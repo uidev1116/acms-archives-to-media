@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Tests\Support;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Services\Facades\Database;
 use Acms\Services\Media\Helper;
 use Acms\Services\Media\MediaImportPreview;
@@ -28,7 +29,7 @@ final class FakeMediaHelper extends Helper
             'sql' => 'SELECT media_id FROM ' . DB_PREFIX . 'media WHERE media_hash = ? ORDER BY media_id LIMIT 1',
             'params' => [$hash],
         ], 'one');
-        return $existing ? MediaImportPreview::reuse((int) $existing, $filename) : MediaImportPreview::create($filename);
+        return is_numeric($existing) && (int) $existing > 0 ? MediaImportPreview::reuse((int) $existing, $filename) : MediaImportPreview::create($filename);
     }
 
     public function registerLocalFile(string $filepath, string $filename): int
@@ -41,7 +42,7 @@ final class FakeMediaHelper extends Helper
             return $preview->reusedMediaId();
         }
         $hash = hash_file('sha256', $filepath);
-        $mid = (int) Database::query(\SQL::nextval('media_id', dsn()), 'seq');
+        $mid = Cast::int(Database::query(\SQL::nextval('media_id', dsn()), 'seq'));
         $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
         $isImage = in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true);
         Database::query([
@@ -64,12 +65,12 @@ final class FakeMediaHelper extends Helper
 
     public function deleteItem($mid)
     {
-        $this->deleted[] = (int) $mid;
+        $this->deleted[] = $mid;
         Database::query(['sql' => 'DELETE FROM ' . DB_PREFIX . 'media WHERE media_id = ?', 'params' => [$mid]], 'exec');
     }
 
     public function saveTags($mid, $tags, $bid = BID)
     {
-        $this->tagCalls[] = [(string) $mid, (string) $tags];
+        $this->tagCalls[] = [Cast::str($mid), Cast::str($tags)];
     }
 }

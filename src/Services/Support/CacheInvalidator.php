@@ -33,7 +33,8 @@ class CacheInvalidator
         if ($locator instanceof ColumnLocator) {
             $entryId = $this->db->one('SELECT column_entry_id FROM ' . $this->db->t($locator->table()) . ' WHERE column_id = ?', [$locator->columnId]);
             if ($entryId !== null) {
-                $this->fieldTargets['eid:' . $entryId . ':' . (string) $locator->revId] = ['eid', (int) $entryId, $locator->revId];
+                $eid = Cast::int($entryId);
+                $this->fieldTargets['eid:' . $eid . ':' . (string) $locator->revId] = ['eid', $eid, $locator->revId];
             }
         }
     }

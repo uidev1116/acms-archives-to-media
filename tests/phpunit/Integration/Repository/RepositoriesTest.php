@@ -64,7 +64,7 @@ final class RepositoriesTest extends A2mTestCase
         $this->jobs()->setStatus($id, JobStatus::Failed, 'boom');
         $job = $this->jobs()->find($id);
         $this->assertSame('boom', $job?->message);
-        $this->assertNotNull($job?->finishedAt);
+        $this->assertNotNull($job->finishedAt);
     }
 
     #[Test]
@@ -75,7 +75,7 @@ final class RepositoriesTest extends A2mTestCase
         $this->jobs()->setCursor($id, '{"x":1}');
         $job = $this->jobs()->find($id);
         $this->assertSame(7, $job?->options->chunkSize);
-        $this->assertSame('{"x":1}', $job?->scanCursor);
+        $this->assertSame('{"x":1}', $job->scanCursor);
     }
 
     #[Test]
@@ -101,12 +101,12 @@ final class RepositoriesTest extends A2mTestCase
 
         $this->assertNotNull($first);
         $this->assertNull($second);
-        $item = $this->items()->find((int) $first);
+        $item = $this->items()->find($first);
         $this->assertSame(ItemStatus::Pending, $item?->status);
-        $this->assertSame(['001/a.jpg'], $item?->sourcePaths);
-        $this->assertSame(['row' => ['a' => '1']], $item?->before);
-        $this->assertNull($item?->after);
-        $this->assertSame([], $item?->mediaIds);
+        $this->assertSame(['001/a.jpg'], $item->sourcePaths);
+        $this->assertSame(['row' => ['a' => '1']], $item->before);
+        $this->assertNull($item->after);
+        $this->assertSame([], $item->mediaIds);
         $this->assertNull($this->items()->find(999999999));
     }
 
@@ -120,14 +120,14 @@ final class RepositoriesTest extends A2mTestCase
         $this->items()->markConverted($a, [5, 6], ['row' => ['x' => 'y']], ReasonCode::AltMismatch, 'warn');
         $done = $this->items()->find($a);
         $this->assertSame(ItemStatus::Converted, $done?->status);
-        $this->assertSame([5, 6], $done?->mediaIds);
-        $this->assertSame('ALT_MISMATCH', $done?->reason);
-        $this->assertSame(['row' => ['x' => 'y']], $done?->after);
+        $this->assertSame([5, 6], $done->mediaIds);
+        $this->assertSame('ALT_MISMATCH', $done->reason);
+        $this->assertSame(['row' => ['x' => 'y']], $done->after);
 
         $skipped = $this->items()->find($b);
         $this->assertSame(ItemStatus::Skipped, $skipped?->status);
-        $this->assertSame('SOURCE_NOT_FOUND', $skipped?->reason);
-        $this->assertSame('nf', $skipped?->message);
+        $this->assertSame('SOURCE_NOT_FOUND', $skipped->reason);
+        $this->assertSame('nf', $skipped->message);
 
         $this->items()->markStatus($a, ItemStatus::RolledBack);
         $this->assertSame(ItemStatus::RolledBack, $this->items()->find($a)?->status);
@@ -214,7 +214,7 @@ final class RepositoriesTest extends A2mTestCase
         $this->items()->requeue($b, ['row' => ['nope' => '1']]);
 
         $this->assertSame(ItemStatus::Pending, $this->items()->find($a)?->status);
-        $this->assertSame('', $this->items()->find($a)?->reason);
+        $this->assertSame('', $this->items()->find($a)->reason);
         $this->assertSame(['row' => ['fresh' => '1']], $this->items()->find($a)?->before);
         $this->assertSame(ItemStatus::Converted, $this->items()->find($b)?->status);
     }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Services\Job;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\ItemStatus;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Job;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\JobOptions;
@@ -190,7 +191,7 @@ class JobService
                 $r = $this->presentRow($row);
                 fputcsv($out, array_map($this->csvCell(...), [
                     $r['id'], $r['target'], $r['ownerType'], $r['ownerId'], $r['status'], $r['reason'],
-                    implode(' | ', $r['sourcePaths']), implode(',', $r['mediaIds']), (string) $r['message'],
+                    implode(' | ', $r['sourcePaths']), implode(',', $r['mediaIds']), Cast::str($r['message']),
                 ]), ',', '"', '\\');
             }
             $page++;
@@ -203,7 +204,7 @@ class JobService
 
     private function csvCell(mixed $value): string
     {
-        $s = (string) $value;
+        $s = Cast::str($value);
         if ($s !== '' && in_array($s[0], ['=', '+', '-', '@', "\t", "\r"], true)) {
             return "'" . $s;
         }
@@ -212,27 +213,27 @@ class JobService
 
     /**
      * @param array<string, mixed> $row
-     * @return array<string, mixed>
+     * @return array{id: int, target: string, table: string, locator: mixed, ownerType: string, ownerId: string, sourcePaths: list<string>, preview: string, mediaIds: list<int>, status: string, reason: string, reasonLabel: string, message: string|null, blogId: int}
      */
     private function presentRow(array $row): array
     {
-        $paths = json_decode((string) $row['item_source_paths'], true);
-        $reason = ReasonCode::tryFrom((string) $row['item_reason']);
+        $paths = json_decode(Cast::str($row['item_source_paths']), true);
+        $reason = ReasonCode::tryFrom(Cast::str($row['item_reason']));
         return [
-            'id' => (int) $row['item_id'],
-            'target' => (string) $row['item_target'],
-            'table' => (string) $row['item_table'],
-            'locator' => json_decode((string) $row['item_locator'], true),
-            'ownerType' => (string) $row['item_owner_type'],
-            'ownerId' => (string) $row['item_owner_id'],
-            'sourcePaths' => is_array($paths) ? array_values(array_map('strval', $paths)) : [],
-            'preview' => (string) $row['item_preview'],
-            'mediaIds' => array_values(array_map('intval', array_filter(explode(',', (string) $row['item_media_ids']), static fn (string $v): bool => $v !== ''))),
-            'status' => (string) $row['item_status'],
-            'reason' => (string) $row['item_reason'],
+            'id' => Cast::int($row['item_id']),
+            'target' => Cast::str($row['item_target']),
+            'table' => Cast::str($row['item_table']),
+            'locator' => json_decode(Cast::str($row['item_locator']), true),
+            'ownerType' => Cast::str($row['item_owner_type']),
+            'ownerId' => Cast::str($row['item_owner_id']),
+            'sourcePaths' => is_array($paths) ? array_values(array_map(static fn (mixed $p): string => Cast::str($p), $paths)) : [],
+            'preview' => Cast::str($row['item_preview']),
+            'mediaIds' => array_values(array_map('intval', array_filter(explode(',', Cast::str($row['item_media_ids'])), static fn (string $v): bool => $v !== ''))),
+            'status' => Cast::str($row['item_status']),
+            'reason' => Cast::str($row['item_reason']),
             'reasonLabel' => $reason?->label() ?? '',
-            'message' => $row['item_message'] === null ? null : (string) $row['item_message'],
-            'blogId' => (int) $row['item_blog_id'],
+            'message' => $row['item_message'] === null ? null : Cast::str($row['item_message']),
+            'blogId' => Cast::int($row['item_blog_id']),
         ];
     }
 

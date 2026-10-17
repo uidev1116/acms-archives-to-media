@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Services\Repository;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Support\Db;
 
 /**
@@ -26,7 +27,7 @@ class PathMapRepository
              WHERE m.map_blog_id = ? AND m.map_source_path = ?',
             [$blogId, $path]
         );
-        return $mediaId === null ? null : (int) $mediaId;
+        return $mediaId === null ? null : Cast::int($mediaId);
     }
 
     public function save(int $blogId, string $path, int $mediaId, ?int $createdByJob): void
@@ -54,7 +55,7 @@ class PathMapRepository
             'SELECT DISTINCT map_media_id FROM ' . $this->db->t('a2m_path_map') . ' WHERE map_created_by_job = ?',
             [$jobId]
         );
-        return array_values(array_map(static fn (array $r): int => (int) $r['map_media_id'], $rows));
+        return array_map(static fn (array $r): int => Cast::int($r['map_media_id']), $rows);
     }
 
     public function deleteByMedia(int $mediaId): void

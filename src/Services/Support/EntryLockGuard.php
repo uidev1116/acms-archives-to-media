@@ -47,7 +47,7 @@ class EntryLockGuard
                 'SELECT column_entry_id FROM ' . $this->db->t($locator->table()) . ' WHERE column_id = ?',
                 [$locator->columnId]
             );
-            return $id === null ? null : (int) $id;
+            return $id === null ? null : Cast::int($id);
         }
         if ($locator instanceof FieldLocator) {
             if ($locator->ownerColumn === 'eid') {
@@ -58,7 +58,7 @@ class EntryLockGuard
                     'SELECT column_entry_id FROM ' . $this->db->t($locator->revId === null ? 'column' : 'column_rev') . ' WHERE column_id = ?',
                     [(string) $locator->ownerId]
                 );
-                return $id === null ? null : (int) $id;
+                return $id === null ? null : Cast::int($id);
             }
         }
         return null;

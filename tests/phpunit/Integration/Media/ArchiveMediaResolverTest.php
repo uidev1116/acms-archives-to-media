@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Tests\Integration\Media;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\ReasonCode;
 use Acms\Plugins\ArchivesToMedia\Services\Media\MediaMeta;
 use Acms\Plugins\ArchivesToMedia\Services\Media\MediaReferenceChecker;
@@ -94,7 +95,7 @@ final class ArchiveMediaResolverTest extends A2mTestCase
         $this->archives->put('001/a.jpg', 'AAA');
         $res = $this->resolver()->resolve('001/a.jpg', $child, 1, new MediaMeta());
 
-        $this->assertSame((string) $child, (string) $this->db->one('SELECT media_blog_id FROM ' . $this->db->t('media') . ' WHERE media_id = ?', [$res->mediaId]));
+        $this->assertSame((string) $child, Cast::str($this->db->one('SELECT media_blog_id FROM ' . $this->db->t('media') . ' WHERE media_id = ?', [$res->mediaId])));
     }
 
     #[Test]

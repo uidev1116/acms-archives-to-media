@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Tests\Integration\Converter;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Converter\ConflictException;
 use Acms\Plugins\ArchivesToMedia\Services\Converter\ConversionSkipException;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Candidate;
@@ -17,6 +18,9 @@ final class UnitConvertersTest extends A2mTestCase
 {
     private const D = ':acms_unit_delimiter:';
 
+    /**
+     * @param list<string> $paths
+     */
     private function imageCandidate(string $id, array $paths, ?int $rev = null): Candidate
     {
         return new Candidate(TargetType::UnitImage, new ColumnLocator($id, $rev), 'entry', $this->entryId, $this->blogId, $paths);
@@ -35,7 +39,7 @@ final class UnitConvertersTest extends A2mTestCase
             'column_field_6' => 'EXIF',
             'column_size' => '640',
             'column_align' => 'center',
-            'column_sort' => 7,
+            'column_sort' => '7',
         ]);
         $c = $this->unitImageConverter();
         $cand = $this->imageCandidate('u1', ['001/a.jpg']);
@@ -54,8 +58,8 @@ final class UnitConvertersTest extends A2mTestCase
         $this->assertSame('https://example.com/', $row['column_field_7']);
         $this->assertSame('', $row['column_field_8']);
         // レイアウトは変えない
-        $this->assertSame(['640', 'center', '7', 'u1'], [$row['column_size'], $row['column_align'], (string) $row['column_sort'], $row['column_id']]);
-        $this->assertSame($row['column_field_1'], $after['row']['column_field_1']);
+        $this->assertSame(['640', 'center', '7', 'u1'], [$row['column_size'], $row['column_align'], Cast::str($row['column_sort']), $row['column_id']]);
+        $this->assertSame($row['column_field_1'], $this->child($after, 'row')['column_field_1']);
     }
 
     #[Test]

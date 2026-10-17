@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Tests\Integration\Job;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Converter\ConverterInterface;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Candidate;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\ItemStatus;
@@ -57,7 +58,7 @@ final class JobRunnerTest extends A2mTestCase
         $this->assertSame(3, $job->converted);
         $this->assertNotNull($job->finishedAt);
         // 新規メディアの alt が入る
-        $alt = $this->db->one('SELECT media_field_3 FROM ' . $this->db->t('media') . ' WHERE media_id = ?', [(int) $this->columnRow('u1')['column_field_1']]);
+        $alt = $this->db->one('SELECT media_field_3 FROM ' . $this->db->t('media') . ' WHERE media_id = ?', [Cast::int($this->columnRow('u1')['column_field_1'])]);
         $this->assertSame('代替', $alt);
         // 元のファイルは消えない
         $this->assertFileExists($this->archives->dir . '001/a.jpg');
@@ -230,7 +231,7 @@ final class JobRunnerTest extends A2mTestCase
         $this->insertColumn('ml', 'image', ['column_field_2' => "001/ja.jpg{$d}001/en.jpg"]);
         $jobId = $this->scannedJob(['targets' => ['unit_image']]);
         $this->runner()->runChunk($this->job($jobId));
-        $ids = explode($d, (string) $this->columnRow('ml')['column_field_1']);
+        $ids = explode($d, Cast::str($this->columnRow('ml')['column_field_1']));
         $this->assertCount(2, $ids);
         $this->assertNotSame($ids[0], $ids[1]);
     }
@@ -285,8 +286,8 @@ final class JobRunnerTest extends A2mTestCase
         $this->seedBasic();
         $jobId = $this->scannedJob(['targets' => ['unit_image', 'unit_file']]);
         $real = $this->unitImageConverter();
-        $exploding = new class ($real, $this->db) implements ConverterInterface {
-            public function __construct(private readonly ConverterInterface $inner, private readonly \Acms\Plugins\ArchivesToMedia\Services\Support\Db $db)
+        $exploding = new class ($real) implements ConverterInterface {
+            public function __construct(private readonly ConverterInterface $inner)
             {
             }
 
@@ -386,6 +387,7 @@ final class JobRunnerTest extends A2mTestCase
         $runner = $this->runner();
         $runner->runChunk($this->job($jobId));
         $probe = ($this->lockFactory())();
+        $this->assertInstanceOf(Lock::class, $probe);
         $this->assertFalse($probe->isLocked());
     }
 
@@ -420,7 +422,7 @@ final class JobRunnerTest extends A2mTestCase
         $coordinator->scanChunk($this->job($id));
         $this->runner()->runChunk($this->job($id));
 
-        $mid = (int) $this->columnRow('cu')['column_field_1'];
-        $this->assertSame((string) $child, (string) $this->db->one('SELECT media_blog_id FROM ' . $this->db->t('media') . ' WHERE media_id = ?', [$mid]));
+        $mid = Cast::int($this->columnRow('cu')['column_field_1']);
+        $this->assertSame((string) $child, Cast::str($this->db->one('SELECT media_blog_id FROM ' . $this->db->t('media') . ' WHERE media_id = ?', [$mid])));
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\POST\ArchivesToMedia;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use ACMS_POST;
 use Acms\Plugins\ArchivesToMedia\Services\Admin\ApiEndpoint;
 use Acms\Services\Facades\Application as App;
@@ -29,7 +30,7 @@ class Api extends ACMS_POST
         $input = [];
         foreach (self::KEYS as $key) {
             if ($this->Post->isExists($key)) {
-                $input[$key] = (string) $this->Post->get($key);
+                $input[$key] = $this->Post->get($key);
             }
         }
         $action = $input['action'] ?? '';
@@ -37,7 +38,7 @@ class Api extends ACMS_POST
 
         @set_time_limit(60);
         $result = $endpoint->execute($action, $input, sessionWithAdministration(), BID, (int) SUID);
-        httpStatusCode((string) $result['status']);
+        httpStatusCode(Cast::str($result['status']));
         Common::responseJson($result['body']);
     }
 }

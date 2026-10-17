@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Tests\Integration\Job;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Admin\AdminApi;
 use Acms\Plugins\ArchivesToMedia\Services\Admin\DefinitionProvider;
 use Acms\Plugins\ArchivesToMedia\Services\Converter\FieldNameResolver;
@@ -254,7 +255,7 @@ final class JobServiceTest extends A2mTestCase
         $this->service()->run($job->id, $this->blogId);
 
         $csv = $this->service()->exportCsv($job->id, $this->blogId);
-        $lines = array_values(array_filter(explode("\n", $csv)));
+        $lines = array_values(array_filter(explode("\n", $csv), static fn (string $l): bool => $l !== ''));
 
         $this->assertStringStartsWith("\xEF\xBB\xBF", $csv);
         $this->assertStringContainsString('source_path', $lines[0]);
@@ -298,11 +299,11 @@ final class JobServiceTest extends A2mTestCase
         $api = $this->api();
 
         $created = $api->handle('create', ['options' => json_encode(['chunkSize' => 50])], $this->blogId, 1);
-        $jobId = $created['job']['id'];
-        $this->assertSame('draft', $created['job']['status']);
+        $jobId = Cast::int($this->child($created, 'job')['id']);
+        $this->assertSame('draft', $this->child($created, 'job')['status']);
 
-        $scan = ['done' => false];
-        for ($i = 0; $i < 20 && !$scan['done']; $i++) {
+        $scan = ['done' => false, 'total' => 0];
+        for ($i = 0; $i < 20 && $scan['done'] !== true; $i++) {
             $scan = $api->handle('scan', ['jobId' => (string) $jobId], $this->blogId, 1);
         }
         $this->assertSame(4, $scan['total']);
@@ -313,7 +314,7 @@ final class JobServiceTest extends A2mTestCase
         $this->assertSame(2, $run['converted']);
 
         $this->assertSame(1, $api->handle('jobs', ['page' => '1'], $this->blogId, 1)['total']);
-        $this->assertSame($jobId, $api->handle('job', ['jobId' => $jobId], $this->blogId, 1)['job']['id']);
+        $this->assertSame($jobId, $this->child($api->handle('job', ['jobId' => $jobId], $this->blogId, 1), 'job')['id']);
         $this->assertSame(4, $api->handle('items', ['jobId' => $jobId, 'perPage' => '50'], $this->blogId, 1)['total']);
         $this->assertSame(['media', 'media_2'], $api->handle('definitions', [], $this->blogId, 1)['mediaUnitTypes']);
 
@@ -332,14 +333,14 @@ final class JobServiceTest extends A2mTestCase
     {
         $this->seed();
         $api = $this->api();
-        $jobId = $api->handle('create', ['options' => '{"chunkSize":50}'], $this->blogId, 1)['job']['id'];
+        $jobId = Cast::int($this->child($api->handle('create', ['options' => '{"chunkSize":50}'], $this->blogId, 1), 'job')['id']);
         $api->handle('update', ['jobId' => $jobId, 'options' => '{"targets":["unit_file"],"chunkSize":50}'], $this->blogId, 1);
         $scan = $api->handle('scan', ['jobId' => $jobId], $this->blogId, 1);
         $this->assertSame(1, $scan['total']);
         $api->handle('run', ['jobId' => $jobId], $this->blogId, 1);
         $again = $api->handle('requeue', ['jobId' => $jobId], $this->blogId, 1);
         $this->assertSame(0, $again['requeued']);
-        $this->assertSame('completed', $again['job']['status']);
+        $this->assertSame('completed', $this->child($again, 'job')['status']);
     }
 
     #[Test]

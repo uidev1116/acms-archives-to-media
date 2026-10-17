@@ -17,10 +17,16 @@ final class Snapshot
     {
         $out = [];
         foreach ($row as $k => $v) {
-            $out[$k] = $v === null ? null : (is_scalar($v) ? (string) $v : json_encode($v));
+            $out[$k] = $v === null ? null : (is_scalar($v) ? (string) $v : self::encode($v));
         }
         ksort($out);
         return $out;
+    }
+
+    private static function encode(mixed $value): string
+    {
+        $json = json_encode($value);
+        return $json === false ? '' : $json;
     }
 
     /**

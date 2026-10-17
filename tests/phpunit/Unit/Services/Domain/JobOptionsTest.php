@@ -78,6 +78,9 @@ final class JobOptionsTest extends TestCase
         $this->assertSame(30, JobOptions::fromArray(['chunkSize' => '30'])->chunkSize);
     }
 
+    /**
+     * @param array<mixed> $input
+     */
     #[Test]
     #[DataProvider('invalidInputs')]
     public function 不正な入力は例外(array $input): void
