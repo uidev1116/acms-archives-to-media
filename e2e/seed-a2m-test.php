@@ -17,6 +17,7 @@
  *   エントリー a2m-locked … 編集ロック中のエントリー（ENTRY_LOCKED のスキップ確認用）
  *   エントリー a2m-many   … 画像ユニット 30 件（一時停止・再開の確認用）
  *   エントリー a2m-custom … カスタムユニット内のフィールド（画像・ファイル）とフィールドグループ（カスタムユニット所属の確認用）
+ *   ブログ・カテゴリー・ユーザー・モジュール … それぞれに画像・ファイルフィールドとフィールドグループ（エントリー以外の所属の確認用）
  *   エントリー a2m-rev    … リビジョン（entry_rev / column_rev / field_rev）を持つエントリー（リビジョンを含める設定の確認用）
  *   archives/a2m-test/    … 上記が参照する実ファイル
  */
@@ -71,6 +72,9 @@ foreach (['entry', 'entry_rev'] as $table) {
     q('DELETE FROM ' . t($table) . ' WHERE entry_blog_id = ?', [$blogId], 'exec');
 }
 q('DELETE FROM ' . t('media') . ' WHERE media_blog_id = ?', [$blogId], 'exec');
+q('DELETE FROM ' . t('category') . ' WHERE category_blog_id = ? AND category_code = ?', [$blogId, 'a2m-seed-category'], 'exec');
+q('DELETE FROM ' . t('module') . ' WHERE module_blog_id = ? AND module_identifier = ?', [$blogId, 'a2m_seed_module'], 'exec');
+q('DELETE FROM ' . t('user') . ' WHERE user_blog_id = ? AND user_code = ?', [$blogId, 'a2m-seed-user'], 'exec');
 q('DELETE FROM ' . t('a2m_path_map') . ' WHERE map_blog_id = ?', [$blogId], 'exec');
 q('DELETE i FROM ' . t('a2m_item') . ' i INNER JOIN ' . t('a2m_job') . ' j ON j.job_id = i.item_job_id WHERE j.job_blog_id = ?', [$blogId], 'exec');
 q('DELETE FROM ' . t('a2m_job') . ' WHERE job_blog_id = ?', [$blogId], 'exec');
@@ -250,6 +254,27 @@ foreach ([1, 2] as $n) {
     // ユニット内のフィールドグループ（title / photo / doc を 1 グループに）
     foreach (['title', 'photo', 'doc'] as $i => $fd) {
         q('INSERT INTO ' . t('field') . ' (field_key, field_value, field_type, field_sort, field_search, field_eid, field_unit_id, field_blog_id) VALUES (\'@card\', ?, NULL, ?, \'off\', NULL, ?, ?)', [$fd, $i + 1, $uid, $blogId], 'exec');
+    }
+}
+
+// 7. エントリー以外の所属（ブログ・カテゴリー・ユーザー・モジュール）のフィールド
+$ownerIds = [
+    'bid' => $blogId,
+    'cid' => \Acms\TestingFramework\Seeder\CategorySeeder::seed($blogId, ['category_code' => 'a2m-seed-category', 'category_name' => 'a2m category']),
+    'uid' => \Acms\TestingFramework\Seeder\UserSeeder::seed($blogId, ['user_code' => 'a2m-seed-user', 'user_name' => 'a2m user', 'user_mail' => 'a2m-seed-user@example.invalid']),
+    'mid' => \Acms\TestingFramework\Seeder\ModuleSeeder::seed($blogId, ['module_identifier' => 'a2m_seed_module', 'module_name' => 'Calendar_Month']),
+];
+foreach ($ownerIds as $col => $ownerId) {
+    $rows = imageField('ownerphoto', $p . 'custom-1.jpg', '', "{$col} の画像") + [
+        'ownerdoc@path' => $p . 'estimate.pdf', 'ownerdoc@baseName' => 'estimate.pdf', 'ownerdoc@fileSize' => '350',
+        'ownerdoc@downloadName' => '資料.pdf', 'ownerdoc@originalName' => 'estimate.pdf', 'ownerdoc@secret' => md5("ownerdoc{$col}"),
+        'ownertitle' => "{$col} のタイトル",
+    ];
+    foreach ($rows as $key => $value) {
+        q('INSERT INTO ' . t('field') . ' (field_key, field_value, field_type, field_sort, field_search, field_eid, field_' . $col . ', field_blog_id) VALUES (?, ?, NULL, 1, \'off\', NULL, ?, ?)', [$key, $value, $ownerId, $blogId], 'exec');
+    }
+    foreach (['ownertitle', 'ownerphoto', 'ownerdoc'] as $i => $fd) {
+        q('INSERT INTO ' . t('field') . ' (field_key, field_value, field_type, field_sort, field_search, field_eid, field_' . $col . ', field_blog_id) VALUES (\'@owner\', ?, NULL, ?, \'off\', NULL, ?, ?)', [$fd, $i + 1, $ownerId, $blogId], 'exec');
     }
 }
 

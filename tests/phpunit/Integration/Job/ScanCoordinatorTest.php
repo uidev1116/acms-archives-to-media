@@ -173,7 +173,7 @@ final class ScanCoordinatorTest extends A2mTestCase
         $this->archives->put('003/h.jpg');
         $this->insertImageField('hero', '003/h.jpg');
         $this->insertField('hero_media', 'x');
-        $jobId = $this->newJob(['targets' => ['field_image']]);
+        $jobId = $this->newJob(['targets' => ['field_image'], 'field' => ['mode' => 'suffix']]);
         $this->scanAll($jobId);
         $item = $this->items()->byStatuses($jobId, [ItemStatus::Skipped], 0, 5)[0];
         $this->assertSame('DEST_CONFLICT', $item->reason);

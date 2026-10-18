@@ -188,7 +188,7 @@ abstract class A2mTestCase extends DatabaseTestCase
             $this->items(),
             $this->jobs(),
         );
-        $id = $this->jobs()->create($this->blogId, 1, \Acms\Plugins\ArchivesToMedia\Services\Domain\JobOptions::fromArray($options + ['chunkSize' => 50]));
+        $id = $this->jobs()->create($this->blogId, 1, \Acms\Plugins\ArchivesToMedia\Services\Domain\JobOptions::fromArray($options + ['field' => ['mode' => 'suffix'], 'chunkSize' => 50]));
         for ($i = 0; $i < 100; $i++) {
             $job = $this->jobs()->find($id);
             $this->assertNotNull($job);

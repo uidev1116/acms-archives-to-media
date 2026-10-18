@@ -238,7 +238,7 @@ final class ScannersTest extends A2mTestCase
         $this->insertField('conflict_media', 'x');
         $this->insertImageField('fresh', '001/c.jpg');
 
-        $got = $this->drain($this->fieldImage());
+        $got = $this->drain($this->fieldImage(), JobOptions::fromArray(['field' => ['mode' => 'suffix']]));
         $keys = array_map(static fn (Candidate $c) => $c->locator instanceof FieldLocator ? $c->locator->key : '', $got);
 
         $this->assertSame(['conflict', 'fresh'], $keys);

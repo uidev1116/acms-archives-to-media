@@ -13,6 +13,7 @@ use Acms\Plugins\ArchivesToMedia\Services\Domain\Locator\ColumnLocator;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Locator\FieldLocator;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\ReasonCode;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\TargetType;
+use Acms\Plugins\ArchivesToMedia\Tests\Support\Opts;
 use Acms\Plugins\ArchivesToMedia\Tests\Support\A2mTestCase;
 use PHPUnit\Framework\Attributes\Test;
 
@@ -46,7 +47,7 @@ final class FieldMediaConverterTest extends A2mTestCase
         $this->insertImageField('hero', '001/a.jpg', 1, 'alt');
         $before = $this->valuesByKey();
 
-        $after = $this->fieldConverter()->apply($this->candidate(), [42], JobOptions::defaults());
+        $after = $this->fieldConverter()->apply($this->candidate(), [42], Opts::suffix());
         $now = $this->valuesByKey();
 
         $this->assertSame('42', $now['hero_media#1']);
@@ -115,7 +116,7 @@ final class FieldMediaConverterTest extends A2mTestCase
         $this->insertField('@news', 'body', 3, ['field_search' => 'off']);
         $this->insertField('@other', 'title', 1);
 
-        $after = $this->fieldConverter()->apply($this->candidate(), [42], JobOptions::defaults());
+        $after = $this->fieldConverter()->apply($this->candidate(), [42], Opts::suffix());
 
         $groups = $this->db->all('SELECT field_value, field_sort FROM ' . $this->db->t('field') . ' WHERE field_eid = ? AND field_key = \'@news\' ORDER BY field_sort', [$this->entryId]);
         $this->assertSame(['title', 'hero', 'body', 'hero_media'], array_map(static fn ($r) => $r['field_value'], $groups));
@@ -142,7 +143,7 @@ final class FieldMediaConverterTest extends A2mTestCase
         $snapshotAll = $this->db->all('SELECT * FROM ' . $this->db->t('field') . ' WHERE field_eid = ? ORDER BY field_key, field_sort, field_value', [$this->entryId]);
 
         $conv = $this->fieldConverter();
-        $opts = JobOptions::defaults();
+        $opts = Opts::suffix();
         $before = $conv->snapshot($this->locator(), $opts);
         $after = $conv->apply($this->candidate(), [42], $opts);
         $conv->restore($this->locator(), (array) $before, $after, $opts);
@@ -171,7 +172,7 @@ final class FieldMediaConverterTest extends A2mTestCase
     {
         $this->insertImageField('hero', '001/a.jpg');
         $conv = $this->fieldConverter();
-        $opts = JobOptions::defaults();
+        $opts = Opts::suffix();
         $before = $conv->snapshot($this->locator(), $opts);
         $after = $conv->apply($this->candidate(), [42], $opts);
         $this->db->exec('UPDATE ' . $this->db->t('field') . ' SET field_value = ? WHERE field_key = ? AND field_eid = ?', ['99', 'hero_media@media', $this->entryId]);
@@ -184,7 +185,7 @@ final class FieldMediaConverterTest extends A2mTestCase
     public function スナップショットが不正なら戻せない(): void
     {
         $this->expectException(ConflictException::class);
-        $this->fieldConverter()->restore($this->locator(), [], [], JobOptions::defaults());
+        $this->fieldConverter()->restore($this->locator(), [], [], Opts::suffix());
     }
 
     #[Test]
@@ -193,7 +194,7 @@ final class FieldMediaConverterTest extends A2mTestCase
         $this->insertImageField('hero', '001/a.jpg');
         $this->insertField('hero_media', '5');
         try {
-            $this->fieldConverter()->apply($this->candidate(), [42], JobOptions::defaults());
+            $this->fieldConverter()->apply($this->candidate(), [42], Opts::suffix());
             $this->fail('例外が必要');
         } catch (ConversionSkipException $e) {
             $this->assertSame(ReasonCode::DestConflict, $e->reason);
@@ -215,7 +216,7 @@ final class FieldMediaConverterTest extends A2mTestCase
         $this->insertField('hero@path', '');
         foreach ([[42, ReasonCode::StaleSnapshot], [0, ReasonCode::MediaRegisterFailed]] as [$mid, $reason]) {
             try {
-                $this->fieldConverter()->apply($this->candidate(), [$mid], JobOptions::defaults());
+                $this->fieldConverter()->apply($this->candidate(), [$mid], Opts::suffix());
                 $this->fail('例外が必要');
             } catch (ConversionSkipException $e) {
                 $this->assertSame($reason, $e->reason);
@@ -246,7 +247,7 @@ final class FieldMediaConverterTest extends A2mTestCase
         $this->insertImageField('hero', '001/a.jpg', 1);
         $this->insertImageField('hero', '001/a.jpg', 1, '', [], 3);
 
-        $this->fieldConverter()->apply($this->candidate('hero', TargetType::FieldImage, 1, 3), [8], JobOptions::defaults());
+        $this->fieldConverter()->apply($this->candidate('hero', TargetType::FieldImage, 1, 3), [8], Opts::suffix());
 
         $this->assertSame([], $this->fieldRows('hero\\_media%'));
         $rev = $this->db->all('SELECT field_key, field_rev_id FROM ' . $this->db->t('field_rev') . ' WHERE field_eid = ? AND field_key LIKE \'hero\\_media%\'', [$this->entryId]);
@@ -263,7 +264,7 @@ final class FieldMediaConverterTest extends A2mTestCase
         $loc = new FieldLocator('hero', 1, 'unit_id', 'cu1', null, $this->blogId);
         $cand = new Candidate(TargetType::FieldImage, $loc, 'unit', 'cu1', $this->blogId, ['001/a.jpg']);
 
-        $this->fieldConverter()->apply($cand, [11], JobOptions::defaults());
+        $this->fieldConverter()->apply($cand, [11], Opts::suffix());
 
         $rows = $this->db->all('SELECT field_key, field_unit_id, field_eid FROM ' . $this->db->t('field') . ' WHERE field_unit_id = ? AND field_key LIKE \'hero\\_media%\'', ['cu1']);
         $this->assertCount(2, $rows);
@@ -273,9 +274,9 @@ final class FieldMediaConverterTest extends A2mTestCase
     #[Test]
     public function フィールドが無ければスナップショットはnull_別種のロケーターは拒否(): void
     {
-        $this->assertNull($this->fieldConverter()->snapshot($this->locator('ghost'), JobOptions::defaults()));
+        $this->assertNull($this->fieldConverter()->snapshot($this->locator('ghost'), Opts::suffix()));
         $this->expectException(\InvalidArgumentException::class);
-        $this->fieldConverter()->snapshot(new ColumnLocator('x'), JobOptions::defaults());
+        $this->fieldConverter()->snapshot(new ColumnLocator('x'), Opts::suffix());
     }
 
     #[Test]
@@ -306,8 +307,8 @@ final class FieldMediaConverterTest extends A2mTestCase
     {
         $conv = $this->fieldConverter();
         $this->db->begin();
-        $conv->lock($this->locator(), JobOptions::defaults());
-        $conv->lock($this->locator('ghost'), JobOptions::defaults());
+        $conv->lock($this->locator(), Opts::suffix());
+        $conv->lock($this->locator('ghost'), Opts::suffix());
         $this->db->rollBack();
         $this->addToAssertionCount(1);
     }
@@ -329,7 +330,7 @@ final class FieldMediaConverterTest extends A2mTestCase
         $loc = new FieldLocator('hero', 1, 'unit_id', 'cu1', null, $this->blogId);
         $cand = new Candidate(TargetType::FieldImage, $loc, 'unit', 'cu1', $this->blogId, ['001/a.jpg']);
         $conv = $this->fieldConverter();
-        $opts = JobOptions::defaults();
+        $opts = Opts::suffix();
         $before = $conv->snapshot($loc, $opts);
         $after = $conv->apply($cand, [42], $opts);
 

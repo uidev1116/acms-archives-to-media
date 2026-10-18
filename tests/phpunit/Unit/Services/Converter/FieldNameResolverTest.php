@@ -15,8 +15,8 @@ final class FieldNameResolverTest extends TestCase
     public function 別名モードは接尾辞を付ける(): void
     {
         $r = new FieldNameResolver();
-        $this->assertSame('hero_media', $r->resolve('hero', JobOptions::defaults()));
-        $o = JobOptions::fromArray(['field' => ['suffix' => '_m']]);
+        $this->assertSame('hero_media', $r->resolve('hero', JobOptions::fromArray(['field' => ['mode' => 'suffix']])));
+        $o = JobOptions::fromArray(['field' => ['mode' => 'suffix', 'suffix' => '_m']]);
         $this->assertSame('hero_m', $r->resolve('hero', $o));
     }
 

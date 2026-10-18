@@ -97,7 +97,7 @@ final class JobOptions
         if (!is_array($field)) {
             throw new \InvalidArgumentException('field が不正です。');
         }
-        $mode = $field['mode'] ?? self::FIELD_MODE_SUFFIX;
+        $mode = $field['mode'] ?? self::FIELD_MODE_SAME;
         if (!in_array($mode, [self::FIELD_MODE_SUFFIX, self::FIELD_MODE_SAME, self::FIELD_MODE_CUSTOM], true)) {
             throw new \InvalidArgumentException('フィールドの書き込み先モードが不正です。');
         }

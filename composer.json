@@ -34,7 +34,7 @@
         "test": "vendor/bin/phpunit",
         "lint": "vendor/bin/phpcs --standard=phpcs.xml.dist",
         "format": "vendor/bin/phpcbf --standard=phpcs.xml.dist",
-        "analyse": "vendor/bin/phpstan analyse",
+        "analyse": "vendor/bin/phpstan analyse --memory-limit=512M",
         "check": [
             "@lint",
             "@analyse",

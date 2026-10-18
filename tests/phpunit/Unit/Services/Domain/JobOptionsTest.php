@@ -13,18 +13,18 @@ use PHPUnit\Framework\Attributes\Test;
 final class JobOptionsTest extends TestCase
 {
     #[Test]
-    public function 既定値は別名モードでリビジョンなし_enlargedはauto(): void
+    public function 既定値は同名モードでリビジョンなし_enlargedはauto(): void
     {
         $o = JobOptions::defaults();
 
         $this->assertCount(4, $o->targets);
-        $this->assertSame(JobOptions::FIELD_MODE_SUFFIX, $o->fieldMode);
+        $this->assertSame(JobOptions::FIELD_MODE_SAME, $o->fieldMode);
         $this->assertSame('_media', $o->fieldSuffix);
         $this->assertFalse($o->includeRevisions);
         $this->assertFalse($o->includeChildBlogs);
         $this->assertSame('auto', $o->enlarged);
         $this->assertTrue($o->appendToGroup);
-        $this->assertFalse($o->removeLegacyKeys);
+        $this->assertTrue($o->removeLegacyKeys);
         $this->assertSame(['open', 'close', 'draft'], $o->entryStatus);
         $this->assertSame(20, $o->chunkSize);
     }

@@ -485,7 +485,7 @@ final class JobServiceTest extends A2mTestCase
     {
         $this->seed();
         $api = $this->api();
-        $jobId = $this->child($api->handle('create', ['options' => '{"chunkSize":50,"targets":["field_image"]}'], $this->blogId, 1), 'job')['id'];
+        $jobId = $this->child($api->handle('create', ['options' => '{"chunkSize":50,"targets":["field_image"],"field":{"mode":"suffix"}}'], $this->blogId, 1), 'job')['id'];
         $jobId = Cast::int($jobId);
         $api->handle('scan', ['jobId' => $jobId], $this->blogId, 1);
         $api->handle('run', ['jobId' => $jobId], $this->blogId, 1);
