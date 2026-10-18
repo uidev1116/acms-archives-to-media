@@ -77,7 +77,7 @@ class JobService
      */
     public function scan(int $jobId, int $blogId): array
     {
-        $job = $this->jobFor($jobId, $blogId);
+        $job = $this->jobToOperate($jobId, $blogId);
         $result = $this->scanner->scanChunk($job);
         if ($result['done']) {
             $this->log->info('スキャンが完了しました', ['jobId' => $jobId, 'total' => $result['total']]);
@@ -117,7 +117,7 @@ class JobService
 
     public function run(int $jobId, int $blogId): ChunkResult
     {
-        $job = $this->jobFor($jobId, $blogId);
+        $job = $this->jobToOperate($jobId, $blogId);
         $first = $job->status === JobStatus::Scanned;
         if ($first) {
             $this->log->info('変換を開始しました', ['jobId' => $jobId, 'userId' => $job->userId, 'options' => $job->options->toArray()]);
@@ -140,12 +140,12 @@ class JobService
 
     public function requeue(int $jobId, int $blogId): int
     {
-        return $this->runner->requeue($this->jobFor($jobId, $blogId));
+        return $this->runner->requeue($this->jobToOperate($jobId, $blogId));
     }
 
     public function rollback(int $jobId, int $blogId, bool $deleteCreatedMedia): ChunkResult
     {
-        $job = $this->jobFor($jobId, $blogId);
+        $job = $this->jobToOperate($jobId, $blogId);
         if ($job->status !== JobStatus::RollingBack) {
             $this->log->info('ロールバックを開始しました', ['jobId' => $jobId, 'deleteCreatedMedia' => $deleteCreatedMedia]);
         }
@@ -158,7 +158,7 @@ class JobService
 
     public function cleanup(int $jobId, int $blogId): ChunkResult
     {
-        $job = $this->jobFor($jobId, $blogId);
+        $job = $this->jobToOperate($jobId, $blogId);
         $result = $this->cleaner->cleanupChunk($job);
         if ($result->done) {
             $this->log->info('旧データのクリーンアップが完了しました', ['jobId' => $jobId]);
@@ -278,6 +278,20 @@ class JobService
             'message' => $row['item_message'] === null ? null : Cast::str($row['item_message']),
             'blogId' => Cast::int($row['item_blog_id']),
         ];
+    }
+
+    /**
+     * データを書き換える操作の対象ジョブ。ジョブを作った人とは別の管理者が操作することもあるので、
+     * 子ブログを含むジョブは、操作する人が全子孫ブログの管理権限を持つことを毎回確認する。
+     *
+     * @throws JobNotFoundException
+     * @throws ForbiddenException
+     */
+    private function jobToOperate(int $jobId, int $blogId): Job
+    {
+        $job = $this->jobFor($jobId, $blogId);
+        $this->assertCanAdminister($blogId, $job->options);
+        return $job;
     }
 
     private function jobFor(int $jobId, int $blogId): Job

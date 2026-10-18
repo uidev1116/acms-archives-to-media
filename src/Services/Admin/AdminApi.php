@@ -12,6 +12,9 @@ use Acms\Plugins\ArchivesToMedia\Services\Job\JobService;
  */
 class AdminApi
 {
+    /** 一度に除外できるアイテム ID の上限 */
+    private const MAX_IDS = 5000;
+
     public function __construct(private readonly JobService $service, private readonly DefinitionProvider $definitions)
     {
     }
@@ -79,8 +82,8 @@ class AdminApi
             if (is_string($raw)) {
                 $raw = json_decode($raw, true);
             }
-            if (!is_array($raw)) {
-                throw new \InvalidArgumentException('ids が不正です。');
+            if (!is_array($raw) || count($raw) > self::MAX_IDS) {
+                throw new \InvalidArgumentException('ids が不正です（最大 ' . self::MAX_IDS . ' 件）。');
             }
             $ids = [];
             foreach ($raw as $id) {
@@ -151,7 +154,7 @@ class AdminApi
             return $default;
         }
         $v = $input[$key];
-        if (is_string($v) && preg_match('/^-?\d+$/', $v) === 1) {
+        if (is_string($v) && preg_match('/^-?\d+$/D', $v) === 1) {
             $v = (int) $v;
         }
         if (!is_int($v)) {
@@ -160,7 +163,8 @@ class AdminApi
         if ($required && $v < 1) {
             throw new \InvalidArgumentException($key . ' が不正です。');
         }
-        return $required ? $v : max($default > 0 ? 1 : 0, $v);
+        // 極端に大きい値（ページ番号のオフセット溢れなど）を避けるため、上限を設ける
+        return $required ? $v : min(1_000_000, max($default > 0 ? 1 : 0, $v));
     }
 
     /**

@@ -127,6 +127,37 @@ final class JobServiceTest extends A2mTestCase
     }
 
     #[Test]
+    public function 子ブログを含めるジョブは_権限を失ったユーザーが実行系の操作をしても拒否される(): void
+    {
+        $parent = $this->createTestBlog(['blog_left' => 1, 'blog_right' => 4]);
+        $child = $this->createTestBlog(['blog_parent' => $parent, 'blog_left' => 2, 'blog_right' => 3]);
+        $this->canAdminister = static fn (int $blogId): bool => true;
+        $job = $this->service()->create($parent, 1, ['includeChildBlogs' => true]);
+
+        // 別の管理者（親ブログだけ管理できる）が、同じジョブを操作しようとする
+        $this->canAdminister = static fn (int $blogId): bool => $blogId !== $child;
+        $service = $this->service();
+        $operations = [
+            'scan' => fn () => $service->scan($job->id, $parent),
+            'run' => fn () => $service->run($job->id, $parent),
+            'requeue' => fn () => $service->requeue($job->id, $parent),
+            'rollback' => fn () => $service->rollback($job->id, $parent, false),
+            'cleanup' => fn () => $service->cleanup($job->id, $parent),
+        ];
+        foreach ($operations as $name => $operation) {
+            try {
+                $operation();
+                $this->fail($name . ' は拒否されるはず');
+            } catch (ForbiddenException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+        // 読み取りと一時停止、削除は妨げない
+        $this->assertSame($job->id, $service->get($job->id, $parent)['job']['id']);
+        $service->delete($job->id, $parent);
+    }
+
+    #[Test]
     public function 子ブログを含めないジョブでは子孫の権限を確認しない(): void
     {
         $parent = $this->createTestBlog(['blog_left' => 1, 'blog_right' => 4]);
@@ -423,6 +454,8 @@ final class JobServiceTest extends A2mTestCase
             ['create', ['options' => 'not json']],
             ['create', ['options' => '[1,2]x']],
             ['exclude', ['jobId' => '1', 'ids' => 'x']],
+            ['exclude', ['jobId' => '1', 'ids' => range(1, 5001)]],
+            ['job', ['jobId' => "1\n"]],
         ];
         foreach ($bad as [$action, $input]) {
             try {
@@ -438,6 +471,8 @@ final class JobServiceTest extends A2mTestCase
     public function AdminApiのjobsは不正なページ番号を1に丸める(): void
     {
         $this->assertSame(0, $this->api()->handle('jobs', ['page' => '-5'], $this->blogId, 1)['total']);
+        // 極端に大きいページ番号でも、オフセットが溢れずに空の結果を返す
+        $this->assertSame(0, $this->api()->handle('jobs', ['page' => '99999999999999999999'], $this->blogId, 1)['total']);
     }
 
     #[Test]
