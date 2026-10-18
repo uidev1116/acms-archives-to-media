@@ -55,7 +55,7 @@ export function App() {
 
   return (
     <DefinitionsProvider value={definitions}>
-      <nav className="a2m-nav" aria-label="ArchivesToMedia">
+      <nav className="acms-admin-a2m-nav" aria-label="ArchivesToMedia">
         <a href="#/" aria-current={route.name === 'wizard' ? 'page' : undefined}>
           新しい変換
         </a>

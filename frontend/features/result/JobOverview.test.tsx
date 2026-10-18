@@ -40,9 +40,20 @@ function detail(
 
 function setup(
   d: JobDetail,
-  handlers: Partial<{ onRollback: () => void; onCsv: () => void; onRequeue: () => void }> = {},
+  handlers: Partial<{
+    onRollback: () => void;
+    onCsv: () => void;
+    onRequeue: () => void;
+    onCleanup: () => void;
+  }> = {},
 ) {
-  const props = { onRollback: vi.fn(), onCsv: vi.fn(), onRequeue: vi.fn(), ...handlers };
+  const props = {
+    onRollback: vi.fn(),
+    onCsv: vi.fn(),
+    onRequeue: vi.fn(),
+    onCleanup: vi.fn(),
+    ...handlers,
+  };
   render(
     <DefinitionsProvider value={defs}>
       <JobOverview detail={d} {...props} />
@@ -100,5 +111,27 @@ describe('JobOverview', () => {
     const opts = toJobOptions({ ...defaultFormState(defs), targets: ['unit_image'] });
     setup(detail({ options: opts }));
     expect(screen.queryByText('テンプレート移行のヒント')).not.toBeInTheDocument();
+  });
+
+  it('別名モードで完了したジョブは、旧データのクリーンアップができる', async () => {
+    const d = { ...detail(), cleanup: { cleanable: 4, cleaned: 0 } };
+    const p = setup(d);
+    await userEvent.click(screen.getByRole('button', { name: '旧データを削除（クリーンアップ）' }));
+    expect(p.onCleanup).toHaveBeenCalled();
+  });
+
+  it('クリーンアップ済みの件数を表示し、対象が無ければボタンを出さない', () => {
+    setup({ ...detail(), cleanup: { cleanable: 0, cleaned: 3 } });
+    expect(screen.getByText('旧データ削除済み: 3 件')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '旧データを削除（クリーンアップ）' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('完了していないジョブにはクリーンアップを出さない', () => {
+    setup({ ...detail({ status: 'paused' }), cleanup: { cleanable: 2, cleaned: 0 } });
+    expect(
+      screen.queryByRole('button', { name: '旧データを削除（クリーンアップ）' }),
+    ).not.toBeInTheDocument();
   });
 });

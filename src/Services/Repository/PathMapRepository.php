@@ -24,8 +24,8 @@ class PathMapRepository
         $mediaId = $this->db->one(
             'SELECT m.map_media_id FROM ' . $this->db->t('a2m_path_map') . ' m
              INNER JOIN ' . $this->db->t('media') . ' d ON d.media_id = m.map_media_id
-             WHERE m.map_blog_id = ? AND m.map_source_path = ?',
-            [$blogId, $path]
+             WHERE m.map_blog_id = ? AND m.map_path_hash = ?',
+            [$blogId, sha1($path)]
         );
         return $mediaId === null ? null : Cast::int($mediaId);
     }
@@ -34,13 +34,13 @@ class PathMapRepository
     {
         // 古い（メディア削除済み）行があれば置き換える
         $this->db->exec(
-            'DELETE FROM ' . $this->db->t('a2m_path_map') . ' WHERE map_blog_id = ? AND map_source_path = ?',
-            [$blogId, $path]
+            'DELETE FROM ' . $this->db->t('a2m_path_map') . ' WHERE map_blog_id = ? AND map_path_hash = ?',
+            [$blogId, sha1($path)]
         );
         $this->db->exec(
-            'INSERT INTO ' . $this->db->t('a2m_path_map') . ' (map_blog_id, map_source_path, map_media_id, map_created_by_job, map_created_datetime)
-             VALUES (?, ?, ?, ?, ?)',
-            [$blogId, $path, $mediaId, $createdByJob, date('Y-m-d H:i:s')]
+            'INSERT INTO ' . $this->db->t('a2m_path_map') . ' (map_blog_id, map_source_path, map_path_hash, map_media_id, map_created_by_job, map_created_datetime)
+             VALUES (?, ?, ?, ?, ?, ?)',
+            [$blogId, $path, sha1($path), $mediaId, $createdByJob, date('Y-m-d H:i:s')]
         );
     }
 

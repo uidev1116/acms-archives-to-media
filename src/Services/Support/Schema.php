@@ -51,6 +51,7 @@ final class Schema
             `item_message` text DEFAULT NULL,
             `item_before` longtext DEFAULT NULL,
             `item_after` longtext DEFAULT NULL,
+            `item_cleanup` longtext DEFAULT NULL,
             `item_blog_id` int(11) NOT NULL,
             `item_updated_datetime` datetime NOT NULL,
             PRIMARY KEY (`item_id`),
@@ -62,10 +63,11 @@ final class Schema
         $this->db->exec('CREATE TABLE IF NOT EXISTS ' . $this->db->t('a2m_path_map') . ' (
             `map_blog_id` int(11) NOT NULL,
             `map_source_path` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+            `map_path_hash` char(40) NOT NULL,
             `map_media_id` int(11) NOT NULL,
             `map_created_by_job` int(11) DEFAULT NULL,
             `map_created_datetime` datetime NOT NULL,
-            UNIQUE KEY `blog_path` (`map_blog_id`, `map_source_path`),
+            UNIQUE KEY `blog_path_hash` (`map_blog_id`, `map_path_hash`),
             KEY `map_media_id` (`map_media_id`),
             KEY `map_created_by_job` (`map_created_by_job`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci');
@@ -75,12 +77,46 @@ final class Schema
 
     /**
      * 既に作成済みのテーブルを現在の定義にそろえる（何度実行しても安全）。
-     * パスは大文字小文字を区別する（Linux のファイル名と同じ）。スキャンのカーソルは長くなりうる。
+     *
+     * - パスは大文字小文字を区別する（Linux のファイル名と同じ）。ユニークキーは長いパスそのものではなく
+     *   sha1 のハッシュ列に張る（古い MySQL のキー長制限を避ける）。
+     * - スキャンのカーソルは長くなりうるので text。
+     * - クリーンアップで消した旧キーの行を item_cleanup に控え、ロールバックで戻せるようにする。
      */
     private function migrate(): void
     {
-        $this->db->exec('ALTER TABLE ' . $this->db->t('a2m_path_map') . ' MODIFY `map_source_path` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL');
+        $path = 'a2m_path_map';
+        if (!$this->columnExists($path, 'map_path_hash')) {
+            $this->db->exec('ALTER TABLE ' . $this->db->t($path) . ' ADD COLUMN `map_path_hash` char(40) NOT NULL DEFAULT \'\' AFTER `map_source_path`');
+        }
+        $this->db->exec('UPDATE ' . $this->db->t($path) . ' SET map_path_hash = SHA1(map_source_path) WHERE map_path_hash = \'\'');
+        if ($this->indexExists($path, 'blog_path')) {
+            $this->db->exec('ALTER TABLE ' . $this->db->t($path) . ' DROP INDEX `blog_path`');
+        }
+        if (!$this->indexExists($path, 'blog_path_hash')) {
+            $this->db->exec('ALTER TABLE ' . $this->db->t($path) . ' ADD UNIQUE KEY `blog_path_hash` (`map_blog_id`, `map_path_hash`)');
+        }
+        $this->db->exec('ALTER TABLE ' . $this->db->t($path) . ' MODIFY `map_source_path` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL');
         $this->db->exec('ALTER TABLE ' . $this->db->t('a2m_job') . ' MODIFY `job_scan_cursor` text DEFAULT NULL');
+        if (!$this->columnExists('a2m_item', 'item_cleanup')) {
+            $this->db->exec('ALTER TABLE ' . $this->db->t('a2m_item') . ' ADD COLUMN `item_cleanup` longtext DEFAULT NULL AFTER `item_after`');
+        }
+    }
+
+    private function columnExists(string $table, string $column): bool
+    {
+        return Cast::int($this->db->one(
+            'SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?',
+            [DB_PREFIX . $table, $column]
+        )) > 0;
+    }
+
+    private function indexExists(string $table, string $index): bool
+    {
+        return Cast::int($this->db->one(
+            'SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?',
+            [DB_PREFIX . $table, $index]
+        )) > 0;
     }
 
     public function uninstall(): void

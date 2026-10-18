@@ -49,7 +49,7 @@ function tally(rows: SummaryRow[]): Record<string, Tally> {
 
 export function ScanSummary({ summary }: { summary: SummaryRow[] }) {
   if (summary.length === 0) {
-    return <p className="a2m-muted">変換できる候補は見つかりませんでした。</p>;
+    return <p className="acms-admin-a2m-muted">変換できる候補は見つかりませんでした。</p>;
   }
   const byTarget = tally(summary);
   const reasons = new Map<string, number>();
@@ -60,7 +60,7 @@ export function ScanSummary({ summary }: { summary: SummaryRow[] }) {
   }
 
   return (
-    <div className="a2m-summary">
+    <div className="acms-admin-a2m-summary">
       <Table variant="list">
         <TableHeader>
           <TableRow>
@@ -77,18 +77,18 @@ export function ScanSummary({ summary }: { summary: SummaryRow[] }) {
           {Object.entries(byTarget).map(([target, t]) => (
             <TableRow key={target}>
               <TableHead scope="row">{TARGET_LABEL[target as TargetType] ?? target}</TableHead>
-              <TableCell className="a2m-num">{t.total}</TableCell>
-              <TableCell className="a2m-num">{t.new}</TableCell>
-              <TableCell className="a2m-num">{t.reuse}</TableCell>
-              <TableCell className="a2m-num">{t.mixed}</TableCell>
-              <TableCell className="a2m-num">{t.skipped}</TableCell>
-              <TableCell className="a2m-num">{t.excluded}</TableCell>
+              <TableCell className="acms-admin-a2m-num">{t.total}</TableCell>
+              <TableCell className="acms-admin-a2m-num">{t.new}</TableCell>
+              <TableCell className="acms-admin-a2m-num">{t.reuse}</TableCell>
+              <TableCell className="acms-admin-a2m-num">{t.mixed}</TableCell>
+              <TableCell className="acms-admin-a2m-num">{t.skipped}</TableCell>
+              <TableCell className="acms-admin-a2m-num">{t.excluded}</TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
       {reasons.size > 0 && (
-        <ul className="a2m-reasons">
+        <ul className="acms-admin-a2m-reasons">
           {[...reasons.entries()].map(([code, count]) => (
             <li key={code}>
               <code>{code}</code> <span>{REASON_LABEL[code] ?? code}</span>（{count} 件）

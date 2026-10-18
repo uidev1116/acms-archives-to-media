@@ -44,9 +44,9 @@ export function TemplateHints({ fieldKeys, field }: Props) {
   };
 
   return (
-    <div className="a2m-hints">
+    <div className="acms-admin-a2m-hints">
       <h3 className="acms-admin-admin-title3">テンプレート移行のヒント</h3>
-      <p className="a2m-muted">
+      <p className="acms-admin-a2m-muted">
         テンプレートは書き換えていません。
         {field.mode === 'same'
           ? '同名モードなので変数名は変わりません（表示側はメディアの値で上書きされます）。'
@@ -57,11 +57,11 @@ export function TemplateHints({ fieldKeys, field }: Props) {
         const s = snippets(fd, dest, kind);
         const text = `${s.next}\n${s.input}`;
         return (
-          <div key={`${kind}-${fd}`} className="a2m-hint">
+          <div key={`${kind}-${fd}`} className="acms-admin-a2m-hint">
             <h4>
               <code>{fd}</code>
             </h4>
-            <pre className="a2m-code">{`<!-- 旧 -->  ${s.old}\n<!-- 新 -->  ${s.next}\n<!-- 入力欄 -->\n${s.input}`}</pre>
+            <pre className="acms-admin-a2m-code">{`<!-- 旧 -->  ${s.old}\n<!-- 新 -->  ${s.next}\n<!-- 入力欄 -->\n${s.input}`}</pre>
             <ButtonV2
               size="small"
               aria-label={`${fd} の新しい書き方をコピー`}

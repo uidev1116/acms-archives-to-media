@@ -25,7 +25,9 @@ export function RollbackModal({ isOpen, count, onClose, onConfirm }: Props) {
           checked={deleteMedia}
           onChange={(e) => setDeleteMedia(e.target.checked)}
         />
-        <p className="a2m-muted">archives の元ファイルは、どちらを選んでも削除しません。</p>
+        <p className="acms-admin-a2m-muted">
+          archives の元ファイルは、どちらを選んでも削除しません。
+        </p>
       </ModalBody>
       <ModalFooter>
         <ButtonV2 onClick={onClose}>キャンセル</ButtonV2>

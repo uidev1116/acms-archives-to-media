@@ -74,18 +74,18 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
   );
 
   return (
-    <section className="a2m-step" aria-labelledby="a2m-settings-title">
+    <section className="acms-admin-a2m-step" aria-labelledby="a2m-settings-title">
       <h2 id="a2m-settings-title" className="acms-admin-admin-title2">
         1. 設定
       </h2>
 
-      <Alert variant="warning" className="a2m-note" role="note">
+      <Alert variant="warning" className="acms-admin-a2m-note" role="note">
         テンプレートを直す前に管理画面でエントリーを再保存すると、書き込んだメディアの値（別名のフィールド）は消えます。
         旧データは残るので表示は壊れません。消えた分は、テンプレート更新後にもう一度実行すると揃います。
       </Alert>
 
       <Fieldset legend="変換する対象">
-        <div className="a2m-checks">
+        <div className="acms-admin-a2m-checks">
           {ALL_TARGETS.map((t: TargetType) => (
             <Checkbox
               key={t}
@@ -100,9 +100,9 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
       {unitTargets && (
         <Fieldset legend="ユニット種類のマッピング（変換元 → メディアユニット）">
           {visibleSourceTypes.length === 0 ? (
-            <p className="a2m-muted">変換できる画像・ファイルユニットはありません。</p>
+            <p className="acms-admin-a2m-muted">変換できる画像・ファイルユニットはありません。</p>
           ) : (
-            <ul className="a2m-mapping">
+            <ul className="acms-admin-a2m-mapping">
               {visibleSourceTypes.map(({ type, count }) => (
                 <li key={type}>
                   <label htmlFor={`a2m-map-${type}`}>
@@ -130,7 +130,7 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
       )}
 
       <Fieldset legend="フィールドの書き込み先">
-        <div className="a2m-checks a2m-checks--column">
+        <div className="acms-admin-a2m-checks acms-admin-a2m-checks--column">
           {FIELD_MODES.map((m) => (
             <Radio
               key={m.value}
@@ -142,7 +142,7 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
           ))}
         </div>
         {value.fieldMode === 'suffix' && (
-          <div className="a2m-inline">
+          <div className="acms-admin-a2m-inline">
             <label htmlFor="a2m-suffix">接尾辞</label>
             <Input
               id="a2m-suffix"
@@ -150,28 +150,30 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
               value={value.fieldSuffix}
               onChange={(e) => set('fieldSuffix', e.target.value)}
             />
-            <span className="a2m-muted">例: main_image → main_image{value.fieldSuffix}</span>
+            <span className="acms-admin-a2m-muted">
+              例: main_image → main_image{value.fieldSuffix}
+            </span>
           </div>
         )}
         {value.fieldMode === 'custom' && (
-          <div className="a2m-block">
+          <div className="acms-admin-a2m-block">
             <label htmlFor="a2m-custom">フィールド名の対応（元=先）</label>
             <textarea
               id="a2m-custom"
               aria-label="フィールド名の対応（元=先）"
-              className="acms-admin-form-control a2m-textarea"
+              className="acms-admin-form-control acms-admin-a2m-textarea"
               rows={3}
               placeholder={'main_image=main_visual'}
               value={value.customText}
               onChange={(e) => set('customText', e.target.value)}
             />
-            <p className="a2m-muted">
+            <p className="acms-admin-a2m-muted">
               1 行に 1 つ。書かなかったフィールドは接尾辞（{value.fieldSuffix}）を付けます。
             </p>
           </div>
         )}
         {value.fieldMode === 'same' && (
-          <Alert variant="danger" className="a2m-note" role="note">
+          <Alert variant="danger" className="acms-admin-a2m-note" role="note">
             同名モードでは、メディアフィールドが表示時に <code>{'{fd}@path'}</code>{' '}
             を上書きするため、テンプレートを同時に差し替える必要があります。
             差し替えるまで、表示が壊れます。
@@ -184,7 +186,7 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
             onChange={(e) => set('removeLegacyKeys', e.target.checked)}
           />
         )}
-        <div className="a2m-block">
+        <div className="acms-admin-a2m-block">
           <label htmlFor="a2m-include">対象にするフィールド名（空なら全部）</label>
           <Input
             id="a2m-include"
@@ -192,7 +194,7 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
             value={value.includeKeysText}
             onChange={(e) => set('includeKeysText', e.target.value)}
           />
-          <p className="a2m-muted">
+          <p className="acms-admin-a2m-muted">
             検出済み: 画像 {definitions.fieldKeys.image.join(', ') || 'なし'} / ファイル{' '}
             {definitions.fieldKeys.file.join(', ') || 'なし'}
           </p>
@@ -212,7 +214,7 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
       </Fieldset>
 
       <Fieldset legend="オプション">
-        <div className="a2m-checks a2m-checks--column">
+        <div className="acms-admin-a2m-checks acms-admin-a2m-checks--column">
           <Checkbox
             label="リビジョンも変換する"
             checked={value.includeRevisions}
@@ -229,7 +231,7 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
             onChange={(e) => set('fillAltOnNew', e.target.checked)}
           />
         </div>
-        <div className="a2m-inline">
+        <div className="acms-admin-a2m-inline">
           <label htmlFor="a2m-enlarged">拡大表示</label>
           <Select
             id="a2m-enlarged"
@@ -242,7 +244,7 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
             <option value="no">拡大しない</option>
           </Select>
         </div>
-        <div className="a2m-inline">
+        <div className="acms-admin-a2m-inline">
           <label htmlFor="a2m-tags">新規メディアに付けるタグ</label>
           <Input
             id="a2m-tags"
@@ -254,7 +256,7 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
       </Fieldset>
 
       <Fieldset legend="対象のエントリーの状態">
-        <div className="a2m-checks">
+        <div className="acms-admin-a2m-checks">
           {ALL_ENTRY_STATUS.map((s) => (
             <Checkbox
               key={s}
@@ -267,7 +269,7 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
       </Fieldset>
 
       <Fieldset legend="フィールドの所属">
-        <div className="a2m-checks">
+        <div className="acms-admin-a2m-checks">
           {ALL_OWNERS.map((o: OwnerType) => (
             <Checkbox
               key={o}
@@ -281,7 +283,7 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
 
       {errors.length > 0 && (
         <Alert variant="danger" role="alert">
-          <ul className="a2m-errors">
+          <ul className="acms-admin-a2m-errors">
             {errors.map((e) => (
               <li key={e}>{e}</li>
             ))}
@@ -289,7 +291,7 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
         </Alert>
       )}
 
-      <div className="a2m-actions">
+      <div className="acms-admin-a2m-actions">
         <ButtonV2 variant="filled" onClick={submit} disabled={busy}>
           スキャンして確認へ
         </ButtonV2>

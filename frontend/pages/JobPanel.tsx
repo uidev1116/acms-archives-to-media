@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ApiError } from '../api/client';
 import { useApi } from '../api/context';
 import { JobOverview } from '../features/result/JobOverview';
+import { CleanupModal } from '../features/result/CleanupModal';
 import { RollbackModal } from '../features/result/RollbackModal';
 import { RunStep } from '../features/run/RunStep';
 import type { JobDetail } from '../types';
@@ -20,7 +21,8 @@ interface Props {
 type Mode =
   | { type: 'view' }
   | { type: 'run'; total: number }
-  | { type: 'rollback'; total: number; deleteMedia: boolean };
+  | { type: 'rollback'; total: number; deleteMedia: boolean }
+  | { type: 'cleanup'; total: number };
 
 const RUNNABLE = new Set(['scanned', 'paused', 'running', 'failed']);
 const NOT_SCANNED = new Set(['draft', 'scanning']);
@@ -40,6 +42,7 @@ export function JobPanel({ jobId, onChanged, allowDelete = false, onDeleted }: P
   const [notice, setNotice] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>({ type: 'view' });
   const [rollbackOpen, setRollbackOpen] = useState(false);
+  const [cleanupOpen, setCleanupOpen] = useState(false);
 
   const load = useCallback(async (): Promise<JobDetail | null> => {
     try {
@@ -102,7 +105,7 @@ export function JobPanel({ jobId, onChanged, allowDelete = false, onDeleted }: P
   const converted = detail.counts.converted ?? 0;
 
   return (
-    <div className="a2m-panel">
+    <div className="acms-admin-a2m-panel">
       {error !== null && (
         <Alert variant="danger" role="alert">
           {error}
@@ -121,13 +124,14 @@ export function JobPanel({ jobId, onChanged, allowDelete = false, onDeleted }: P
             onCsv={() => api.exportCsv(jobId)}
             onRequeue={() => void requeue()}
             onRollback={() => setRollbackOpen(true)}
+            onCleanup={() => setCleanupOpen(true)}
           />
           {NOT_SCANNED.has(status) && (
             <Alert variant="warning" role="note">
               スキャンが完了していません。<a href="#/">新しい変換</a>からやり直してください。
             </Alert>
           )}
-          <div className="a2m-actions">
+          <div className="acms-admin-a2m-actions">
             {RUNNABLE.has(status) && (
               <ButtonV2
                 variant="filled"
@@ -153,6 +157,25 @@ export function JobPanel({ jobId, onChanged, allowDelete = false, onDeleted }: P
           onFinished={() => void finish()}
         />
       )}
+
+      {mode.type === 'cleanup' && (
+        <RunStep
+          jobId={jobId}
+          total={mode.total}
+          action="cleanup"
+          onFinished={() => void finish()}
+        />
+      )}
+
+      <CleanupModal
+        isOpen={cleanupOpen}
+        count={detail.cleanup?.cleanable ?? 0}
+        onClose={() => setCleanupOpen(false)}
+        onConfirm={() => {
+          setCleanupOpen(false);
+          setMode({ type: 'cleanup', total: detail.cleanup?.cleanable ?? 0 });
+        }}
+      />
 
       <RollbackModal
         isOpen={rollbackOpen}

@@ -3,9 +3,9 @@
  *
  * 見た目の大半は管理画面の acms-admin-* クラス（@ablogcms/components が出力）でまかなう。
  * ここには components に無い部品（ステッパー、タブ、ログ表示など）だけを書く。
- * クラスは a2m- 接頭辞、色や余白は .a2m-root にスコープしたカスタムプロパティで持つ。
+ * クラスは a2m- 接頭辞、色や余白は .acms-admin-a2m-root にスコープしたカスタムプロパティで持つ。
  */
-.a2m-root {
+.acms-admin-a2m-root {
   --a2m-gap: 1rem;
   --a2m-gap-small: 0.5rem;
   --a2m-border: #d5d9de;
@@ -20,20 +20,20 @@
   max-width: 72rem;
 }
 
-.a2m-root .a2m-muted {
+.acms-admin-a2m-root .acms-admin-a2m-muted {
   color: var(--a2m-muted);
   font-size: 0.875em;
 }
 
-.a2m-root .a2m-step {
+.acms-admin-a2m-root .acms-admin-a2m-step {
   margin-block: var(--a2m-gap);
 }
 
-.a2m-root .a2m-note {
+.acms-admin-a2m-root .acms-admin-a2m-note {
   margin-block: var(--a2m-gap);
 }
 
-.a2m-root .a2m-actions {
+.acms-admin-a2m-root .acms-admin-a2m-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--a2m-gap-small);
@@ -41,25 +41,25 @@
   margin-block: var(--a2m-gap);
 }
 
-.a2m-root .a2m-nav {
+.acms-admin-a2m-root .acms-admin-a2m-nav {
   display: flex;
   gap: var(--a2m-gap);
   margin-block-end: var(--a2m-gap);
   border-block-end: 1px solid var(--a2m-border);
 }
 
-.a2m-root .a2m-nav a {
+.acms-admin-a2m-root .acms-admin-a2m-nav a {
   padding: 0.5rem 0.25rem;
   text-decoration: none;
 }
 
-.a2m-root .a2m-nav a[aria-current='page'] {
+.acms-admin-a2m-root .acms-admin-a2m-nav a[aria-current='page'] {
   border-block-end: 2px solid var(--a2m-accent);
   font-weight: bold;
 }
 
 /* ステッパー */
-.a2m-root .a2m-stepper {
+.acms-admin-a2m-root .acms-admin-a2m-stepper {
   display: flex;
   flex-wrap: wrap;
   gap: var(--a2m-gap);
@@ -68,19 +68,19 @@
   list-style: none;
 }
 
-.a2m-root .a2m-stepper-item {
+.acms-admin-a2m-root .acms-admin-a2m-stepper-item {
   display: flex;
   gap: var(--a2m-gap-small);
   align-items: center;
   color: var(--a2m-muted);
 }
 
-.a2m-root .a2m-stepper-item--current {
+.acms-admin-a2m-root .acms-admin-a2m-stepper-item--current {
   color: inherit;
   font-weight: bold;
 }
 
-.a2m-root .a2m-stepper-no {
+.acms-admin-a2m-root .acms-admin-a2m-stepper-no {
   display: inline-flex;
   inline-size: 1.75rem;
   block-size: 1.75rem;
@@ -90,24 +90,24 @@
   align-items: center;
 }
 
-.a2m-root .a2m-stepper-item--current .a2m-stepper-no {
+.acms-admin-a2m-root .acms-admin-a2m-stepper-item--current .acms-admin-a2m-stepper-no {
   border-color: var(--a2m-accent);
   background: var(--a2m-accent);
   color: #fff;
 }
 
 /* フォーム */
-.a2m-root .a2m-checks {
+.acms-admin-a2m-root .acms-admin-a2m-checks {
   display: flex;
   flex-wrap: wrap;
   gap: var(--a2m-gap-small) var(--a2m-gap);
 }
 
-.a2m-root .a2m-checks--column {
+.acms-admin-a2m-root .acms-admin-a2m-checks--column {
   flex-direction: column;
 }
 
-.a2m-root .a2m-inline {
+.acms-admin-a2m-root .acms-admin-a2m-inline {
   display: flex;
   flex-wrap: wrap;
   gap: var(--a2m-gap-small);
@@ -115,37 +115,37 @@
   margin-block: var(--a2m-gap-small);
 }
 
-.a2m-root .a2m-block {
+.acms-admin-a2m-root .acms-admin-a2m-block {
   margin-block: var(--a2m-gap-small);
 }
 
-.a2m-root .a2m-textarea {
+.acms-admin-a2m-root .acms-admin-a2m-textarea {
   inline-size: 100%;
   max-inline-size: 32rem;
 }
 
-.a2m-root .a2m-mapping {
+.acms-admin-a2m-root .acms-admin-a2m-mapping {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.a2m-root .a2m-mapping li {
+.acms-admin-a2m-root .acms-admin-a2m-mapping li {
   display: flex;
   gap: var(--a2m-gap);
   align-items: center;
   margin-block: var(--a2m-gap-small);
 }
 
-.a2m-root .a2m-errors {
+.acms-admin-a2m-root .acms-admin-a2m-errors {
   margin: 0;
   padding-inline-start: 1.25rem;
 }
 
 /* 一覧 */
-.a2m-root .a2m-filters,
-.a2m-root .a2m-bulk,
-.a2m-root .a2m-pager {
+.acms-admin-a2m-root .acms-admin-a2m-filters,
+.acms-admin-a2m-root .acms-admin-a2m-bulk,
+.acms-admin-a2m-root .acms-admin-a2m-pager {
   display: flex;
   flex-wrap: wrap;
   gap: var(--a2m-gap-small);
@@ -153,27 +153,27 @@
   margin-block: var(--a2m-gap-small);
 }
 
-.a2m-root .a2m-path {
+.acms-admin-a2m-root .acms-admin-a2m-path {
   display: block;
   word-break: break-all;
 }
 
-.a2m-root .a2m-reasons {
+.acms-admin-a2m-root .acms-admin-a2m-reasons {
   margin-block: var(--a2m-gap-small);
   padding-inline-start: 1.25rem;
 }
 
 /* 実行の進捗とログ */
-.a2m-root .a2m-count {
+.acms-admin-a2m-root .acms-admin-a2m-count {
   margin-block: var(--a2m-gap-small);
   font-weight: bold;
 }
 
-.a2m-root .a2m-stats span + span {
+.acms-admin-a2m-root .acms-admin-a2m-stats span + span {
   margin-inline-start: var(--a2m-gap);
 }
 
-.a2m-root .a2m-log {
+.acms-admin-a2m-root .acms-admin-a2m-log {
   max-block-size: 20rem;
   margin: var(--a2m-gap) 0;
   padding: var(--a2m-gap-small) var(--a2m-gap-small) var(--a2m-gap-small) 2rem;
@@ -184,27 +184,27 @@
   font-size: 0.8125rem;
 }
 
-.a2m-root .a2m-log-item--converted {
+.acms-admin-a2m-root .acms-admin-a2m-log-item--converted {
   color: var(--a2m-success);
 }
 
-.a2m-root .a2m-log-item--skipped {
+.acms-admin-a2m-root .acms-admin-a2m-log-item--skipped {
   color: var(--a2m-warning);
 }
 
-.a2m-root .a2m-log-item--error {
+.acms-admin-a2m-root .acms-admin-a2m-log-item--error {
   color: var(--a2m-danger);
 }
 
 /* ジョブ詳細のタブ */
-.a2m-root .a2m-tabs {
+.acms-admin-a2m-root .acms-admin-a2m-tabs {
   display: flex;
   gap: var(--a2m-gap-small);
   margin-block-end: var(--a2m-gap);
   border-block-end: 1px solid var(--a2m-border);
 }
 
-.a2m-root .a2m-tab {
+.acms-admin-a2m-root .acms-admin-a2m-tab {
   padding: 0.5rem 1rem;
   border: 0;
   border-block-end: 2px solid transparent;
@@ -212,17 +212,17 @@
   cursor: pointer;
 }
 
-.a2m-root .a2m-tab--active {
+.acms-admin-a2m-root .acms-admin-a2m-tab--active {
   border-block-end-color: var(--a2m-accent);
   font-weight: bold;
 }
 
 /* テンプレート移行のヒント */
-.a2m-root .a2m-hint {
+.acms-admin-a2m-root .acms-admin-a2m-hint {
   margin-block: var(--a2m-gap);
 }
 
-.a2m-root .a2m-code {
+.acms-admin-a2m-root .acms-admin-a2m-code {
   padding: var(--a2m-gap-small) var(--a2m-gap);
   overflow-x: auto;
   border: 1px solid var(--a2m-border);
@@ -230,7 +230,7 @@
   font-size: 0.8125rem;
 }
 
-.a2m-root .a2m-num {
+.acms-admin-a2m-root .acms-admin-a2m-num {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }

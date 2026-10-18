@@ -23,14 +23,14 @@ const STEPS: { id: Step; label: string }[] = [
 
 function Stepper({ current }: { current: Step }) {
   return (
-    <ol className="a2m-stepper" aria-label="手順">
+    <ol className="acms-admin-a2m-stepper" aria-label="手順">
       {STEPS.map((s, i) => (
         <li
           key={s.id}
           aria-current={s.id === current ? 'step' : undefined}
-          className={`a2m-stepper-item${s.id === current ? ' a2m-stepper-item--current' : ''}`}
+          className={`acms-admin-a2m-stepper-item${s.id === current ? ' acms-admin-a2m-stepper-item--current' : ''}`}
         >
-          <span className="a2m-stepper-no">{i + 1}</span> {s.label}
+          <span className="acms-admin-a2m-stepper-no">{i + 1}</span> {s.label}
         </li>
       ))}
     </ol>
@@ -79,7 +79,7 @@ export function Wizard() {
   };
 
   return (
-    <div className="a2m-wizard">
+    <div className="acms-admin-a2m-wizard">
       <Stepper current={step} />
 
       {step === 'settings' && (
@@ -116,12 +116,12 @@ export function Wizard() {
       )}
 
       {step === 'result' && jobId !== null && (
-        <section className="a2m-step" aria-labelledby="a2m-result-title">
+        <section className="acms-admin-a2m-step" aria-labelledby="a2m-result-title">
           <h2 id="a2m-result-title" className="acms-admin-admin-title2">
             4. 結果
           </h2>
           <JobPanel jobId={jobId} />
-          <div className="a2m-actions">
+          <div className="acms-admin-a2m-actions">
             <a className="acms-admin-btn-v2" href="#/jobs">
               過去の実行を見る
             </a>

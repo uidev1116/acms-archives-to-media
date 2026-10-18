@@ -155,6 +155,18 @@ describe('RunStep', () => {
     expect(screen.getByText(/復元済み 3/)).toBeInTheDocument();
   });
 
+  it('クリーンアップでは cleanup を呼び、削除済みと表示する（pause は呼ばない）', async () => {
+    const onFinished = vi.fn();
+    const client = fakeClient({
+      cleanup: chunk({ status: 'completed', done: true, remaining: 0, converted: 4, skipped: 1 }),
+    });
+    renderWithApi(<RunStep jobId={4} total={5} action="cleanup" onFinished={onFinished} />, client);
+    await waitFor(() => expect(onFinished).toHaveBeenCalledTimes(1));
+    expect(client.calls.map((c) => c.action)).toEqual(['cleanup']);
+    expect(screen.getByRole('heading', { name: '旧データのクリーンアップ' })).toBeInTheDocument();
+    expect(screen.getByText(/削除済み 4/)).toBeInTheDocument();
+  });
+
   it('total が 0 でも壊れない', async () => {
     const client = fakeClient({
       run: chunk({ status: 'completed', done: true, remaining: 0, processed: 0, converted: 0 }),

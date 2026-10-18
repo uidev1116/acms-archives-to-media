@@ -15,7 +15,9 @@ use Acms\Plugins\ArchivesToMedia\Services\Media\MediaReferenceChecker;
 use Acms\Plugins\ArchivesToMedia\Services\Repository\ItemRepository;
 use Acms\Plugins\ArchivesToMedia\Services\Repository\JobRepository;
 use Acms\Plugins\ArchivesToMedia\Services\Repository\PathMapRepository;
+use Acms\Plugins\ArchivesToMedia\Services\Domain\Locator\FieldLocator;
 use Acms\Plugins\ArchivesToMedia\Services\Support\CacheInvalidator;
+use Acms\Plugins\ArchivesToMedia\Services\Support\FieldStore;
 use Acms\Services\Common\Lock;
 use Acms\Services\Media\Helper;
 
@@ -40,6 +42,7 @@ class Rollbacker
         private readonly Helper $media,
         private readonly CacheInvalidator $cache,
         private readonly \Closure $lockFactory,
+        private readonly FieldStore $fields,
     ) {
     }
 
@@ -121,6 +124,7 @@ class Rollbacker
         try {
             \Acms\Services\Facades\Database::beginTransaction();
             try {
+                $this->undoCleanup($item);
                 try {
                     $converter->restore($item->locator, $item->before, $item->after, $job->options);
                 } catch (ConflictException $e) {
@@ -132,6 +136,9 @@ class Rollbacker
                 }
                 // 行の復元とステータス更新を同じトランザクションにする
                 $this->items->markStatus($item->id, ItemStatus::RolledBack);
+                if ($item->cleanup !== null) {
+                    $this->items->clearCleanup($item->id);
+                }
                 \Acms\Services\Facades\Database::commit();
             } catch (\Throwable $e) {
                 \Acms\Services\Facades\Database::rollBack();
@@ -144,6 +151,23 @@ class Rollbacker
         }
         $this->cache->collect($item->locator, $item->blogId);
         return ['status' => 'converted', 'reason' => '', 'message' => ''];
+    }
+
+    /**
+     * クリーンアップで消した旧キーの行を戻す（変換前の全行に戻すため）。既に戻っている場合は何もしない。
+     */
+    private function undoCleanup(Item $item): void
+    {
+        $loc = $item->locator;
+        if ($item->cleanup === null || $item->cleanup === [] || !$loc instanceof FieldLocator) {
+            return;
+        }
+        if ($this->fields->family($loc, $loc->key) !== []) {
+            return;
+        }
+        foreach ($item->cleanup as $row) {
+            $this->fields->insertRow($loc->table(), $row);
+        }
     }
 
     /**

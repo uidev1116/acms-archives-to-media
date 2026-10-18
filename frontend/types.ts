@@ -59,10 +59,17 @@ export interface SummaryRow {
   count: number;
 }
 
+export interface CleanupCounts {
+  cleanable: number;
+  cleaned: number;
+}
+
 export interface JobDetail {
   job: Job;
   summary: SummaryRow[];
   counts: Record<string, number>;
+  /** 旧データのクリーンアップの状況（同名モードは常に 0） */
+  cleanup?: CleanupCounts;
 }
 
 export interface ScanResult {

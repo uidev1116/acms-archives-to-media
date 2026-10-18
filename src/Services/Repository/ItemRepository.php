@@ -144,6 +144,51 @@ class ItemRepository
     }
 
     /**
+     * クリーンアップ待ち（変換済みのフィールドで、まだ旧キーを消していない）アイテムを id 順に返す。
+     *
+     * @return list<Item>
+     */
+    public function nextCleanable(int $jobId, int $afterId, int $limit): array
+    {
+        $rows = $this->db->all(
+            'SELECT * FROM ' . $this->db->t('a2m_item') . '
+             WHERE item_job_id = ? AND item_id > ? AND item_status = ? AND item_target IN (?, ?) AND item_cleanup IS NULL
+             ORDER BY item_id ASC LIMIT ' . max(1, $limit),
+            [$jobId, $afterId, ItemStatus::Converted->value, 'field_image', 'field_file']
+        );
+        return array_map(static fn (array $r): Item => Item::fromRow($r), $rows);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows 消した旧キーの行
+     */
+    public function markCleaned(int $id, array $rows): void
+    {
+        $this->db->exec(
+            'UPDATE ' . $this->db->t('a2m_item') . ' SET item_cleanup = ?, item_updated_datetime = ? WHERE item_id = ?',
+            [json_encode($rows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), date('Y-m-d H:i:s'), $id]
+        );
+    }
+
+    public function clearCleanup(int $id): void
+    {
+        $this->db->exec('UPDATE ' . $this->db->t('a2m_item') . ' SET item_cleanup = NULL WHERE item_id = ?', [$id]);
+    }
+
+    /**
+     * @return array{cleanable: int, cleaned: int}
+     */
+    public function cleanupCounts(int $jobId): array
+    {
+        $row = $this->db->row(
+            'SELECT SUM(item_cleanup IS NULL) AS cleanable, SUM(item_cleanup IS NOT NULL) AS cleaned FROM ' . $this->db->t('a2m_item') . '
+             WHERE item_job_id = ? AND item_status = ? AND item_target IN (?, ?)',
+            [$jobId, ItemStatus::Converted->value, 'field_image', 'field_file']
+        );
+        return ['cleanable' => Cast::int($row['cleanable'] ?? 0), 'cleaned' => Cast::int($row['cleaned'] ?? 0)];
+    }
+
+    /**
      * @param list<ItemStatus> $statuses
      * @return list<Item>
      */

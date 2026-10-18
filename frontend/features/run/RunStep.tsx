@@ -12,7 +12,7 @@ interface Props {
   total: number;
   onFinished: () => void;
   /** 繰り返し呼ぶ操作（既定は変換の実行） */
-  action?: 'run' | 'rollback';
+  action?: 'run' | 'rollback' | 'cleanup';
   extraParams?: Record<string, unknown>;
 }
 
@@ -67,18 +67,23 @@ export function RunStep({ jobId, total, onFinished, action = 'run', extraParams 
   const percent = denominator === 0 ? 100 : Math.round((done / denominator) * 100);
 
   return (
-    <section className="a2m-step" aria-labelledby="a2m-run-title">
+    <section className="acms-admin-a2m-step" aria-labelledby="a2m-run-title">
       <h2 id="a2m-run-title" className="acms-admin-admin-title2">
-        {action === 'run' ? '3. 変換の実行' : 'ロールバック'}
+        {action === 'run'
+          ? '3. 変換の実行'
+          : action === 'rollback'
+            ? 'ロールバック'
+            : '旧データのクリーンアップ'}
       </h2>
 
       <ProgressBar value={percent} striped animated={runner.running} label={`${percent}%`} />
-      <p className="a2m-count">
+      <p className="acms-admin-a2m-count">
         {done} / {denominator} 件
       </p>
-      <p className="a2m-stats">
+      <p className="acms-admin-a2m-stats">
         <span>
-          {action === 'run' ? '変換済み' : '復元済み'} {counts.converted}
+          {action === 'run' ? '変換済み' : action === 'rollback' ? '復元済み' : '削除済み'}{' '}
+          {counts.converted}
         </span>{' '}
         <span>スキップ {counts.skipped}</span> <span>エラー {counts.error}</span>
       </p>
@@ -97,7 +102,7 @@ export function RunStep({ jobId, total, onFinished, action = 'run', extraParams 
         </Alert>
       )}
 
-      <div className="a2m-actions">
+      <div className="acms-admin-a2m-actions">
         {runner.running && <ButtonV2 onClick={runner.pause}>一時停止</ButtonV2>}
         {runner.paused && (
           <ButtonV2 variant="filled" onClick={() => void runner.start()}>
@@ -106,9 +111,12 @@ export function RunStep({ jobId, total, onFinished, action = 'run', extraParams 
         )}
       </div>
 
-      <ol className="a2m-log" aria-label="処理ログ">
+      <ol className="acms-admin-a2m-log" aria-label="処理ログ">
         {log.map((l, i) => (
-          <li key={`${l.itemId}-${i}`} className={`a2m-log-item a2m-log-item--${l.status}`}>
+          <li
+            key={`${l.itemId}-${i}`}
+            className={`acms-admin-a2m-log-item acms-admin-a2m-log-item--${l.status}`}
+          >
             #{l.itemId} {l.status}
             {l.reason !== '' && (
               <>

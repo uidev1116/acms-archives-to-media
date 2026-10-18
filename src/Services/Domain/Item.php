@@ -15,6 +15,7 @@ final class Item
      * @param list<int> $mediaIds
      * @param array<string, mixed>|null $before
      * @param array<string, mixed>|null $after
+     * @param list<array<string, mixed>>|null $cleanup
      */
     public function __construct(
         public readonly int $id,
@@ -32,6 +33,8 @@ final class Item
         public readonly ?array $before,
         public readonly ?array $after,
         public readonly int $blogId,
+        /** クリーンアップで消した旧キーの行（ロールバックで戻す）。未実行なら null */
+        public readonly ?array $cleanup = null,
     ) {
     }
 
@@ -45,6 +48,8 @@ final class Item
         $before = isset($row['item_before']) ? json_decode(Cast::str($row['item_before']), true) : null;
         /** @var array<string, mixed>|null $after */
         $after = isset($row['item_after']) ? json_decode(Cast::str($row['item_after']), true) : null;
+        /** @var list<array<string, mixed>>|null $cleanup */
+        $cleanup = isset($row['item_cleanup']) ? json_decode(Cast::str($row['item_cleanup']), true) : null;
         $mediaIds = array_values(array_map('intval', array_filter(
             explode(',', Cast::str($row['item_media_ids'])),
             static fn (string $v): bool => $v !== ''
@@ -66,6 +71,7 @@ final class Item
             is_array($before) ? $before : null,
             is_array($after) ? $after : null,
             Cast::int($row['item_blog_id']),
+            is_array($cleanup) ? $cleanup : null,
         );
     }
 }

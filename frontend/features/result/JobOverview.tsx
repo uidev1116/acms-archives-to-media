@@ -17,14 +17,16 @@ interface Props {
   onRollback: () => void;
   onCsv: () => void;
   onRequeue: () => void;
+  onCleanup: () => void;
 }
 
 const ROLLBACKABLE = new Set(['completed', 'paused', 'running', 'failed', 'rolling_back']);
 const COUNT_ORDER = ['converted', 'skipped', 'error', 'excluded', 'pending', 'rolled_back'];
 
-export function JobOverview({ detail, onRollback, onCsv, onRequeue }: Props) {
+export function JobOverview({ detail, onRollback, onCsv, onRequeue, onCleanup }: Props) {
   const defs = useDefinitions();
   const { job, counts } = detail;
+  const cleanup = detail.cleanup ?? { cleanable: 0, cleaned: 0 };
   const retryable = (counts.skipped ?? 0) + (counts.error ?? 0) > 0;
   const hasFields =
     job.options.targets.includes('field_image') || job.options.targets.includes('field_file');
@@ -34,7 +36,7 @@ export function JobOverview({ detail, onRollback, onCsv, onRequeue }: Props) {
   };
 
   return (
-    <div className="a2m-overview">
+    <div className="acms-admin-a2m-overview">
       <p>
         ジョブ #{job.id}{' '}
         <Badge variant={jobStatusVariant(job.status)}>{JOB_STATUS_LABEL[job.status]}</Badge>
@@ -68,13 +70,20 @@ export function JobOverview({ detail, onRollback, onCsv, onRequeue }: Props) {
         </TableBody>
       </Table>
 
-      <div className="a2m-actions">
+      <div className="acms-admin-a2m-actions">
         <ButtonV2 onClick={onCsv}>結果を CSV でダウンロード</ButtonV2>
         {retryable && <ButtonV2 onClick={onRequeue}>スキップ・エラー分を再実行</ButtonV2>}
+        {job.status === 'completed' && cleanup.cleanable > 0 && (
+          <ButtonV2 onClick={onCleanup}>旧データを削除（クリーンアップ）</ButtonV2>
+        )}
         {ROLLBACKABLE.has(job.status) && (counts.converted ?? 0) > 0 && (
           <ButtonV2 onClick={onRollback}>ロールバック</ButtonV2>
         )}
       </div>
+
+      {cleanup.cleaned > 0 && (
+        <p className="acms-admin-a2m-muted">旧データ削除済み: {cleanup.cleaned} 件</p>
+      )}
 
       {hasFields && <TemplateHints fieldKeys={fieldKeys} field={job.options.field} />}
     </div>

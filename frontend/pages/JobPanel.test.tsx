@@ -205,4 +205,25 @@ describe('JobPanel', () => {
     expect(await screen.findByText(/スキャンが完了していません/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '実行を再開' })).not.toBeInTheDocument();
   });
+
+  it('旧データのクリーンアップ: 確認ダイアログで同意すると cleanup を呼び、終わったら概要を読み直す', async () => {
+    const client = fakeClient({
+      job: [
+        { ...detail({}, { converted: 3 }), cleanup: { cleanable: 3, cleaned: 0 } },
+        { ...detail({}, { converted: 3 }), cleanup: { cleanable: 0, cleaned: 3 } },
+      ],
+      cleanup: done({ converted: 3 }),
+    });
+    mount(client);
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: '旧データを削除（クリーンアップ）' }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByLabelText('テンプレートの移行は完了しています'));
+    await userEvent.click(within(dialog).getByRole('button', { name: '旧データを削除する' }));
+
+    expect(await screen.findByText('旧データ削除済み: 3 件')).toBeInTheDocument();
+    expect(client.calls.find((c) => c.action === 'cleanup')?.params).toEqual({ jobId: 7 });
+  });
 });

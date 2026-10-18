@@ -150,6 +150,20 @@ abstract class A2mTestCase extends DatabaseTestCase
             $this->media,
             new CacheInvalidator($this->db),
             $this->lockFactory(),
+            new FieldStore($this->db),
+        );
+    }
+
+    protected function cleaner(): \Acms\Plugins\ArchivesToMedia\Services\Job\Cleaner
+    {
+        return new \Acms\Plugins\ArchivesToMedia\Services\Job\Cleaner(
+            $this->items(),
+            $this->jobs(),
+            new FieldStore($this->db),
+            new FieldNameResolver(),
+            new EntryLockGuard($this->db, new EntryLock('on', 'off', 48)),
+            new CacheInvalidator($this->db),
+            $this->lockFactory(),
         );
     }
 

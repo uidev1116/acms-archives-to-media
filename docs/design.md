@@ -262,7 +262,7 @@ plugins/ArchivesToMedia/
 
 - **JS**: Vite のライブラリモードで `src/assets/dist/archives-to-media.js`（ES module）を出力します。React 19 と `@ablogcms/components` はバンドルに含めます（管理画面側の React を共有する公開 API が無いため）。
 - **CSS**: Sass は使わず、素の CSS ファイル（`src/assets/css/archives-to-media.css`）を 1 枚そのまま配信します。見た目の大半は、管理画面の `acms-admin.css` にある、コンポーネントが出力するクラス（`acms-admin-*`）でまかなえます。独自 CSS は、components に無い部品（ステッパー、統計タイル、ログ表示）だけにします。
-   - クラスはすべて `a2m-` 接頭辞で管理画面と衝突させない。
+   - クラスはすべて `acms-admin-a2m-` 接頭辞にする（管理画面のクラス体系 `acms-admin-*` に並べつつ、`a2m` を挟んでコアのクラスと衝突させない）。
    - 色や余白は `:root` ではなく `.a2m-root` にスコープしたカスタムプロパティで持つ（管理画面のほかの画面を汚さない）。
    - 入れ子が必要な箇所は、ネイティブの CSS Nesting ではなくフラットなセレクタで書く（管理画面の対応ブラウザに合わせる）。
    - CSS を JS から `import` しない（Vite の CSS 処理を通さず、アセット API で `<link>` として読ませる）。

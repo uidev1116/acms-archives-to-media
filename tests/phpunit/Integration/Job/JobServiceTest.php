@@ -52,6 +52,7 @@ final class JobServiceTest extends A2mTestCase
             $coordinator,
             $this->runner($converters),
             $this->rollbacker($converters),
+            $this->cleaner(),
             new AuditLog(),
             $this->blogScope(),
             $this->canAdminister,
@@ -473,5 +474,33 @@ final class JobServiceTest extends A2mTestCase
 
         $this->expectException(\LogicException::class);
         $this->service()->updateOptions($job->id, $this->blogId, []);
+    }
+
+    #[Test]
+    public function 旧データのクリーンアップは画面のAPIから実行でき_件数が見える(): void
+    {
+        $this->seed();
+        $api = $this->api();
+        $jobId = $this->child($api->handle('create', ['options' => '{"chunkSize":50,"targets":["field_image"]}'], $this->blogId, 1), 'job')['id'];
+        $jobId = Cast::int($jobId);
+        $api->handle('scan', ['jobId' => $jobId], $this->blogId, 1);
+        $api->handle('run', ['jobId' => $jobId], $this->blogId, 1);
+
+        $this->assertSame(['cleanable' => 1, 'cleaned' => 0], $this->child($api->handle('job', ['jobId' => $jobId], $this->blogId, 1), 'cleanup'));
+        $res = $api->handle('cleanup', ['jobId' => $jobId], $this->blogId, 1);
+        $this->assertTrue($res['done']);
+        $this->assertSame(1, $res['converted']);
+        $this->assertSame(['cleanable' => 0, 'cleaned' => 1], $this->child($api->handle('job', ['jobId' => $jobId], $this->blogId, 1), 'cleanup'));
+        $this->assertSame([], $this->fieldRows('hero@%'));
+    }
+
+    #[Test]
+    public function 同名モードのジョブはクリーンアップ対象が0と表示される(): void
+    {
+        $this->seed();
+        $job = $this->service()->create($this->blogId, 1, ['chunkSize' => 50, 'targets' => ['field_image'], 'field' => ['mode' => 'same']]);
+        $this->scan($job->id);
+        $this->service()->run($job->id, $this->blogId);
+        $this->assertSame(['cleanable' => 0, 'cleaned' => 0], $this->service()->get($job->id, $this->blogId)['cleanup']);
     }
 }

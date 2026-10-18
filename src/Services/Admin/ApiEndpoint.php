@@ -17,7 +17,7 @@ class ApiEndpoint
 {
     public const ACTIONS = [
         'definitions', 'jobs', 'job', 'create', 'update', 'scan', 'exclude',
-        'items', 'run', 'pause', 'requeue', 'rollback', 'delete',
+        'items', 'run', 'pause', 'requeue', 'rollback', 'cleanup', 'delete',
     ];
 
     public function __construct(private readonly AdminApi $api, private readonly AuditLog $log)

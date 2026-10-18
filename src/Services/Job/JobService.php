@@ -27,6 +27,7 @@ class JobService
         private readonly ScanCoordinator $scanner,
         private readonly JobRunner $runner,
         private readonly Rollbacker $rollbacker,
+        private readonly Cleaner $cleaner,
         private readonly AuditLog $log,
         private readonly BlogScope $scope,
         /** @var \Closure(int): bool 指定ブログの管理権限があるか（sessionWithAdministration($bid)） */
@@ -48,7 +49,7 @@ class JobService
     }
 
     /**
-     * @return array{job: array<string, mixed>, summary: list<array<string, mixed>>, counts: array<string, int>}
+     * @return array{job: array<string, mixed>, summary: list<array<string, mixed>>, counts: array<string, int>, cleanup: array{cleanable: int, cleaned: int}}
      */
     public function get(int $jobId, int $blogId): array
     {
@@ -57,6 +58,8 @@ class JobService
             'job' => $job->toArray(),
             'summary' => $this->items->summary($jobId),
             'counts' => $this->items->countByStatus($jobId),
+            // 同名モードは変換時に旧キーを置き換え済みなので、クリーンアップの対象は無い
+            'cleanup' => $job->options->fieldMode === 'same' ? ['cleanable' => 0, 'cleaned' => 0] : $this->items->cleanupCounts($jobId),
         ];
     }
 
@@ -149,6 +152,16 @@ class JobService
         $result = $this->rollbacker->rollbackChunk($job, $deleteCreatedMedia);
         if ($result->done) {
             $this->log->info('ロールバックが完了しました', ['jobId' => $jobId, 'restored' => $result->converted, 'conflicts' => $result->error]);
+        }
+        return $result;
+    }
+
+    public function cleanup(int $jobId, int $blogId): ChunkResult
+    {
+        $job = $this->jobFor($jobId, $blogId);
+        $result = $this->cleaner->cleanupChunk($job);
+        if ($result->done) {
+            $this->log->info('旧データのクリーンアップが完了しました', ['jobId' => $jobId]);
         }
         return $result;
     }

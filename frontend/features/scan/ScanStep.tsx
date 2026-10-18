@@ -48,7 +48,7 @@ export function ScanStep({ jobId, onBack, onProceed }: Props) {
   const pending = detail?.counts.pending ?? 0;
 
   return (
-    <section className="a2m-step" aria-labelledby="a2m-scan-title">
+    <section className="acms-admin-a2m-step" aria-labelledby="a2m-scan-title">
       <h2 id="a2m-scan-title" className="acms-admin-admin-title2">
         2. スキャンと確認
       </h2>
@@ -63,7 +63,7 @@ export function ScanStep({ jobId, onBack, onProceed }: Props) {
       )}
 
       {!runner.finished && runner.error === null && (
-        <div className="a2m-progress" role="status">
+        <div className="acms-admin-a2m-progress" role="status">
           <Spinner size="1em" /> スキャン中です…（{found} 件見つかりました）
           <ProgressBar value={null} striped animated />
         </div>
@@ -85,7 +85,7 @@ export function ScanStep({ jobId, onBack, onProceed }: Props) {
               void loadDetail();
             }}
           />
-          <div className="a2m-actions">
+          <div className="acms-admin-a2m-actions">
             <ButtonV2 onClick={onBack}>設定に戻る</ButtonV2>
             <ButtonV2 variant="filled" disabled={pending === 0} onClick={() => setConfirming(true)}>
               変換の実行へ

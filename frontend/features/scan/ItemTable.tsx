@@ -114,8 +114,8 @@ export function ItemTable({
   const items: ItemRow[] = data?.items ?? [];
 
   return (
-    <div className="a2m-items">
-      <div className="a2m-filters">
+    <div className="acms-admin-a2m-items">
+      <div className="acms-admin-a2m-filters">
         <Select
           aria-label="種類で絞り込み"
           value={draft.target}
@@ -150,7 +150,7 @@ export function ItemTable({
       </div>
 
       {editable && (
-        <div className="a2m-bulk">
+        <div className="acms-admin-a2m-bulk">
           <ButtonV2
             size="small"
             disabled={selected.length === 0}
@@ -187,7 +187,7 @@ export function ItemTable({
       )}
 
       {data !== null && items.length === 0 ? (
-        <p className="a2m-muted">該当するアイテムはありません。</p>
+        <p className="acms-admin-a2m-muted">該当するアイテムはありません。</p>
       ) : (
         <TableScrollable>
           <Table variant="list">
@@ -226,7 +226,7 @@ export function ItemTable({
                   </TableCell>
                   <TableCell>
                     {it.sourcePaths.map((p, i) => (
-                      <code key={`${p}-${i}`} className="a2m-path">
+                      <code key={`${p}-${i}`} className="acms-admin-a2m-path">
                         {p}
                       </code>
                     ))}
@@ -245,7 +245,7 @@ export function ItemTable({
         </TableScrollable>
       )}
 
-      <div className="a2m-pager">
+      <div className="acms-admin-a2m-pager">
         <ButtonV2 size="small" disabled={pageNo <= 1} onClick={() => setPageNo((p) => p - 1)}>
           前のページ
         </ButtonV2>

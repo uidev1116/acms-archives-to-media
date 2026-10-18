@@ -16,6 +16,7 @@ use Acms\Plugins\ArchivesToMedia\Services\Converter\FieldMediaConverter;
 use Acms\Plugins\ArchivesToMedia\Services\Converter\FieldNameResolver;
 use Acms\Plugins\ArchivesToMedia\Services\Converter\UnitFileConverter;
 use Acms\Plugins\ArchivesToMedia\Services\Converter\UnitImageConverter;
+use Acms\Plugins\ArchivesToMedia\Services\Job\Cleaner;
 use Acms\Plugins\ArchivesToMedia\Services\Job\JobRunner;
 use Acms\Plugins\ArchivesToMedia\Services\Job\JobService;
 use Acms\Plugins\ArchivesToMedia\Services\Job\Rollbacker;
@@ -287,6 +288,19 @@ class ServiceProvider extends ACMS_App
                 $lockFactory,
             );
         });
+        App::singleton('archives-to-media.cleaner', static function () use ($lockFactory): Cleaner {
+            $entryLock = App::make('entry.lock');
+            assert($entryLock instanceof \Acms\Services\Entry\Lock);
+            return new Cleaner(
+                self::get('archives-to-media.item-repository', ItemRepository::class),
+                self::get('archives-to-media.job-repository', JobRepository::class),
+                new FieldStore(self::db()),
+                new FieldNameResolver(),
+                new EntryLockGuard(self::db(), $entryLock),
+                self::get('archives-to-media.cache-invalidator', CacheInvalidator::class),
+                $lockFactory,
+            );
+        });
         App::singleton('archives-to-media.rollbacker', static fn () => new Rollbacker(
             self::converters(),
             self::get('archives-to-media.item-repository', ItemRepository::class),
@@ -296,6 +310,7 @@ class ServiceProvider extends ACMS_App
             self::media(),
             self::get('archives-to-media.cache-invalidator', CacheInvalidator::class),
             $lockFactory,
+            new FieldStore(self::db()),
         ));
         App::singleton('archives-to-media.job-service', static fn () => new JobService(
             self::get('archives-to-media.job-repository', JobRepository::class),
@@ -303,6 +318,7 @@ class ServiceProvider extends ACMS_App
             self::get('archives-to-media.scan-coordinator', ScanCoordinator::class),
             self::get('archives-to-media.job-runner', JobRunner::class),
             self::get('archives-to-media.rollbacker', Rollbacker::class),
+            self::get('archives-to-media.cleaner', Cleaner::class),
             self::get('archives-to-media.audit-log', AuditLog::class),
             self::get('archives-to-media.blog-scope', BlogScope::class),
             static fn (int $blogId): bool => sessionWithAdministration($blogId),

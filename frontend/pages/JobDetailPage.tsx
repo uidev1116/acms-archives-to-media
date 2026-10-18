@@ -18,7 +18,7 @@ export function JobDetailPage({ jobId }: { jobId: number }) {
   const [reloadKey, setReloadKey] = useState(0);
 
   return (
-    <section className="a2m-step" aria-labelledby="a2m-job-title">
+    <section className="acms-admin-a2m-step" aria-labelledby="a2m-job-title">
       <p>
         <a href="#/jobs">過去の実行に戻る</a>
       </p>
@@ -26,7 +26,7 @@ export function JobDetailPage({ jobId }: { jobId: number }) {
         ジョブ #{jobId}
       </h2>
 
-      <div role="tablist" aria-label="ジョブの表示" className="a2m-tabs">
+      <div role="tablist" aria-label="ジョブの表示" className="acms-admin-a2m-tabs">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -35,7 +35,7 @@ export function JobDetailPage({ jobId }: { jobId: number }) {
             id={`a2m-tab-${t.id}`}
             aria-selected={tab === t.id}
             aria-controls={`a2m-panel-${t.id}`}
-            className={`a2m-tab${tab === t.id ? ' a2m-tab--active' : ''}`}
+            className={`acms-admin-a2m-tab${tab === t.id ? ' acms-admin-a2m-tab--active' : ''}`}
             onClick={() => setTab(t.id)}
           >
             {t.label}

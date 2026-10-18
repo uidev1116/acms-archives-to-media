@@ -39,6 +39,7 @@ class AdminApi
             'run' => $this->service->run($this->jobId($input), $blogId)->toArray(),
             'pause' => ['job' => $this->service->pause($this->jobId($input), $blogId)->toArray()],
             'requeue' => $this->requeue($input, $blogId),
+            'cleanup' => $this->service->cleanup($this->jobId($input), $blogId)->toArray(),
             'rollback' => $this->service->rollback($this->jobId($input), $blogId, $this->bool($input, 'deleteCreatedMedia'))->toArray(),
             'delete' => $this->delete($input, $blogId),
             default => throw new \InvalidArgumentException('不明な操作です。'),

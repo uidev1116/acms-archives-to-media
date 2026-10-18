@@ -43,7 +43,7 @@ export function JobList() {
   const pages = Math.max(1, Math.ceil((data?.total ?? 0) / PER_PAGE));
 
   return (
-    <section className="a2m-step" aria-labelledby="a2m-jobs-title">
+    <section className="acms-admin-a2m-step" aria-labelledby="a2m-jobs-title">
       <h2 id="a2m-jobs-title" className="acms-admin-admin-title2">
         過去の実行
       </h2>
@@ -53,7 +53,7 @@ export function JobList() {
         </Alert>
       )}
       {data !== null && data.jobs.length === 0 && (
-        <p className="a2m-muted">まだ変換ジョブはありません。</p>
+        <p className="acms-admin-a2m-muted">まだ変換ジョブはありません。</p>
       )}
       {data !== null && data.jobs.length > 0 && (
         <>
@@ -79,15 +79,15 @@ export function JobList() {
                     <Badge variant={jobStatusVariant(j.status)}>{JOB_STATUS_LABEL[j.status]}</Badge>
                   </TableCell>
                   <TableCell>{formatDateTime(j.createdAt)}</TableCell>
-                  <TableCell className="a2m-num">{j.total}</TableCell>
-                  <TableCell className="a2m-num">{j.converted}</TableCell>
-                  <TableCell className="a2m-num">{j.skipped}</TableCell>
-                  <TableCell className="a2m-num">{j.error}</TableCell>
+                  <TableCell className="acms-admin-a2m-num">{j.total}</TableCell>
+                  <TableCell className="acms-admin-a2m-num">{j.converted}</TableCell>
+                  <TableCell className="acms-admin-a2m-num">{j.skipped}</TableCell>
+                  <TableCell className="acms-admin-a2m-num">{j.error}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
-          <div className="a2m-pager">
+          <div className="acms-admin-a2m-pager">
             <ButtonV2 size="small" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
               前のページ
             </ButtonV2>
