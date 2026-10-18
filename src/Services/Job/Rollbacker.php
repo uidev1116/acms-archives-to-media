@@ -121,7 +121,17 @@ class Rollbacker
         try {
             \Acms\Services\Facades\Database::beginTransaction();
             try {
-                $converter->restore($item->locator, $item->before, $item->after, $job->options);
+                try {
+                    $converter->restore($item->locator, $item->before, $item->after, $job->options);
+                } catch (ConflictException $e) {
+                    // コミット後・ステータス更新前に中断した場合は、既に元に戻っている（現在行 = before）。冪等に扱う。
+                    $current = $converter->snapshot($item->locator, $job->options);
+                    if ($current === null || !\Acms\Plugins\ArchivesToMedia\Services\Support\Snapshot::equals($current, $item->before)) {
+                        throw $e;
+                    }
+                }
+                // 行の復元とステータス更新を同じトランザクションにする
+                $this->items->markStatus($item->id, ItemStatus::RolledBack);
                 \Acms\Services\Facades\Database::commit();
             } catch (\Throwable $e) {
                 \Acms\Services\Facades\Database::rollBack();
@@ -132,7 +142,6 @@ class Rollbacker
         } catch (\Throwable $e) {
             return $this->conflict($item, ReasonCode::UnknownError, $e->getMessage());
         }
-        $this->items->markStatus($item->id, ItemStatus::RolledBack);
         $this->cache->collect($item->locator, $item->blogId);
         return ['status' => 'converted', 'reason' => '', 'message' => ''];
     }

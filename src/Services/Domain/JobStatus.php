@@ -29,7 +29,7 @@ enum JobStatus: string
     public function canScan(): bool
     {
         return match ($this) {
-            self::Draft, self::Scanning, self::Scanned, self::Failed => true,
+            self::Draft, self::Scanning, self::Scanned => true,
             default => false,
         };
     }

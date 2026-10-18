@@ -73,10 +73,22 @@ class ArchiveMediaResolver
         }
 
         $mediaId = $this->register($source, $this->selector->fileName($normalized, $meta->fileName));
-        // 先に対応表へ記録する。この後の処理が失敗しても、次の実行で同じメディアが再利用され重複しない。
-        $this->pathMap->save($ownerBlogId, $normalized, $mediaId, $jobId);
-        $this->ownership->fix($mediaId, $ownerBlogId);
-        $this->metaWriter->write($mediaId, $ownerBlogId, $meta);
+        // 所属ブログの補正とメタデータの書き込みを済ませてから、最後に対応表へ記録する。
+        // 先に記録すると、補正の途中で失敗したときに、次回は「対応表にあるから」と補正が二度と行われない。
+        try {
+            $this->ownership->fix($mediaId, $ownerBlogId);
+            $this->metaWriter->write($mediaId, $ownerBlogId, $meta);
+            $this->pathMap->save($ownerBlogId, $normalized, $mediaId, $jobId);
+        } catch (\Throwable $e) {
+            // 半端な状態（所属ブログ・alt・タグが未設定）のメディアを残すと、次回は重複として再利用されて補正されない。
+            // 登録したメディアは削除して、次の実行でやり直す（削除できなければ孤立メディアが残るだけで、データは壊れない）。
+            try {
+                $this->media->deleteItem($mediaId);
+            } catch (\Throwable) {
+                // 削除に失敗しても、元の例外を優先する
+            }
+            throw $e;
+        }
 
         return new ResolvedMedia($mediaId, true);
     }

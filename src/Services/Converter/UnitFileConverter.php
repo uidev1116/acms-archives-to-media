@@ -7,6 +7,7 @@ namespace Acms\Plugins\ArchivesToMedia\Services\Converter;
 use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Candidate;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\JobOptions;
+use Acms\Plugins\ArchivesToMedia\Services\Domain\ReasonCode;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\TargetType;
 use Acms\Plugins\ArchivesToMedia\Services\Media\MediaMeta;
 use Acms\Plugins\ArchivesToMedia\Services\Support\Snapshot;
@@ -40,6 +41,9 @@ class UnitFileConverter extends AbstractUnitConverter
     public function apply(Candidate $candidate, array $mediaIds, JobOptions $options): array
     {
         $row = $this->requireRow($candidate->locator);
+        if (preg_match('/^file(_\d+)?$/', Cast::str($row['column_type'])) !== 1) {
+            throw new ConversionSkipException(ReasonCode::StaleSnapshot, 'ファイルユニットではありません（変換済みの可能性があります）。');
+        }
         $count = count($mediaIds);
         $captions = UnitData::pad(UnitData::explode(Cast::str($row['column_field_1'])), $count);
 

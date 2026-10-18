@@ -23,7 +23,7 @@ final class Schema
             `job_converted` int(11) NOT NULL DEFAULT 0,
             `job_skipped` int(11) NOT NULL DEFAULT 0,
             `job_error` int(11) NOT NULL DEFAULT 0,
-            `job_scan_cursor` varchar(255) DEFAULT NULL,
+            `job_scan_cursor` text DEFAULT NULL,
             `job_message` text DEFAULT NULL,
             `job_user_id` int(11) NOT NULL,
             `job_blog_id` int(11) NOT NULL,
@@ -61,7 +61,7 @@ final class Schema
 
         $this->db->exec('CREATE TABLE IF NOT EXISTS ' . $this->db->t('a2m_path_map') . ' (
             `map_blog_id` int(11) NOT NULL,
-            `map_source_path` varchar(512) NOT NULL,
+            `map_source_path` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
             `map_media_id` int(11) NOT NULL,
             `map_created_by_job` int(11) DEFAULT NULL,
             `map_created_datetime` datetime NOT NULL,
@@ -69,6 +69,18 @@ final class Schema
             KEY `map_media_id` (`map_media_id`),
             KEY `map_created_by_job` (`map_created_by_job`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci');
+
+        $this->migrate();
+    }
+
+    /**
+     * 既に作成済みのテーブルを現在の定義にそろえる（何度実行しても安全）。
+     * パスは大文字小文字を区別する（Linux のファイル名と同じ）。スキャンのカーソルは長くなりうる。
+     */
+    private function migrate(): void
+    {
+        $this->db->exec('ALTER TABLE ' . $this->db->t('a2m_path_map') . ' MODIFY `map_source_path` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL');
+        $this->db->exec('ALTER TABLE ' . $this->db->t('a2m_job') . ' MODIFY `job_scan_cursor` text DEFAULT NULL');
     }
 
     public function uninstall(): void

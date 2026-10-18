@@ -341,4 +341,20 @@ final class ScannersTest extends A2mTestCase
         $this->assertSame(TargetType::FieldFile, $this->fieldFile()->target());
         $this->assertInstanceOf(AbstractFieldScanner::class, $this->fieldFile());
     }
+
+    #[Test]
+    public function 所属の種類が違っても同じIDのフィールドを取りこぼさない(): void
+    {
+        $cid = $this->createTestCategory($this->blogId);
+        $this->insertImageField('img', 'a.jpg', 1, '', ['field_eid' => $this->entryId]);
+        $this->insertImageField('img', 'b.jpg', 1, '', ['field_eid' => null, 'field_cid' => $this->entryId]);
+        unset($cid);
+
+        foreach ([1, 2, 5] as $limit) {
+            $got = $this->drain($this->fieldImage(), null, $limit);
+            $paths = array_map(static fn (Candidate $c) => $c->sourcePaths[0], $got);
+            sort($paths);
+            $this->assertSame(['a.jpg', 'b.jpg'], $paths, 'limit=' . $limit);
+        }
+    }
 }

@@ -49,7 +49,7 @@ final class EnumsAndLocatorsTest extends TestCase
             'running' => [JobStatus::Running, true, false, true],
             'paused' => [JobStatus::Paused, true, false, true],
             'completed' => [JobStatus::Completed, false, false, true],
-            'failed' => [JobStatus::Failed, true, true, true],
+            'failed' => [JobStatus::Failed, true, false, true],
             'rolling_back' => [JobStatus::RollingBack, false, false, true],
             'rolled_back' => [JobStatus::RolledBack, false, false, false],
         ];

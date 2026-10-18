@@ -83,7 +83,11 @@ final class ApiEndpointTest extends TestCase
             $res = $this->endpoint($e)->execute('run', ['jobId' => '1'], true, 1, 1);
             $this->assertSame($status, $res['status'], $code);
             $this->assertSame($code, $res['body']['code']);
-            $this->assertSame($e->getMessage(), $res['body']['error']);
+            if ($status === 500) {
+                $this->assertStringNotContainsString('boom', \Acms\Plugins\ArchivesToMedia\Services\Support\Cast::str($res['body']['error']), '内部エラーの詳細は画面に出さない');
+            } else {
+                $this->assertSame($e->getMessage(), $res['body']['error']);
+            }
         }
     }
 

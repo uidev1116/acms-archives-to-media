@@ -136,10 +136,11 @@ class JobRunner
                 $afterId = $item->id;
                 $converter = $this->converterFor($item->target);
                 $before = $converter?->snapshot($item->locator, $job->options);
-                if ($before === null) {
-                    continue; // 行が無くなったものは戻さない
+                $paths = $converter?->currentSourcePaths($item->locator);
+                if ($before === null || $paths === null || count(array_filter($paths, static fn (string $p): bool => $p !== '')) === 0) {
+                    continue; // 行が無くなった・パスが空になったものは戻さない
                 }
-                $this->items->requeue($item->id, $before);
+                $this->items->requeue($item->id, $before, $paths);
                 $count++;
             }
         }
@@ -170,6 +171,9 @@ class JobRunner
             if ($this->lockGuard->isLocked($item->locator)) {
                 return $this->fail($item, ItemStatus::Skipped, ReasonCode::EntryLocked);
             }
+            if ($converter->currentSourcePaths($item->locator) !== $item->sourcePaths) {
+                return $this->fail($item, ItemStatus::Skipped, ReasonCode::StaleSnapshot);
+            }
 
             // 2. メディアの解決（トランザクションの外）
             [$mediaIds, $newFlags, $metas] = $this->resolveMedia($job, $item, $converter, $candidate);
@@ -181,6 +185,11 @@ class JobRunner
                 if ($again === null || !Snapshot::equals($again, $item->before)) {
                     $this->db->rollBack();
                     return $this->fail($item, ItemStatus::Skipped, ReasonCode::StaleSnapshot);
+                }
+                // メディア解決に時間がかかった間にロックされた場合に備え、書き込み直前にも確認する
+                if ($this->lockGuard->isLocked($item->locator)) {
+                    $this->db->rollBack();
+                    return $this->fail($item, ItemStatus::Skipped, ReasonCode::EntryLocked);
                 }
                 $after = $converter->apply($candidate, $mediaIds, $job->options);
                 $warning = $this->altMismatch($item, $mediaIds, $newFlags, $metas);

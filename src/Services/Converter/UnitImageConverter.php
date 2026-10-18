@@ -51,6 +51,10 @@ class UnitImageConverter extends AbstractUnitConverter
     public function apply(Candidate $candidate, array $mediaIds, JobOptions $options): array
     {
         $row = $this->requireRow($candidate->locator);
+        // 変換済み・別種のユニットは二重に変換しない
+        if (preg_match('/^image(_\d+)?$/', Cast::str($row['column_type'])) !== 1) {
+            throw new ConversionSkipException(ReasonCode::StaleSnapshot, '画像ユニットではありません（変換済みの可能性があります）。');
+        }
         $paths = UnitData::pad(UnitData::explode(Cast::str($row['column_field_2'])), count($mediaIds));
         $count = count($mediaIds);
 

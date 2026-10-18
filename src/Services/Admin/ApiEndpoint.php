@@ -50,7 +50,7 @@ class ApiEndpoint
             return $this->error(409, 'state', $e->getMessage());
         } catch (\Throwable $e) {
             $this->log->notice('操作に失敗しました', ['action' => $action, 'error' => $e->getMessage()]);
-            return $this->error(500, 'internal', $e->getMessage());
+            return $this->error(500, 'internal', 'サーバーでエラーが発生しました。詳細は監査ログを確認してください。');
         }
     }
 

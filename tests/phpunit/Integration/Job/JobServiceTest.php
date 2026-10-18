@@ -434,4 +434,44 @@ final class JobServiceTest extends A2mTestCase
     {
         $this->assertSame(0, $this->api()->handle('jobs', ['page' => '-5'], $this->blogId, 1)['total']);
     }
+
+    #[Test]
+    public function 変換済みのアイテムがあるジョブは_失敗状態でも再スキャン・オプション変更できない(): void
+    {
+        $this->seed();
+        $job = $this->service()->create($this->blogId, 1, ['chunkSize' => 50]);
+        $this->scan($job->id);
+        $this->service()->run($job->id, $this->blogId);
+        $this->jobs()->setStatus($job->id, JobStatus::Failed, 'DB が切れた');
+        $before = $this->items()->countByStatus($job->id);
+
+        foreach (
+            [
+                fn () => $this->service()->updateOptions($job->id, $this->blogId, ['targets' => ['field_image']]),
+                fn () => $this->service()->scan($job->id, $this->blogId),
+            ] as $call
+        ) {
+            try {
+                $call();
+                $this->fail('LogicException が必要');
+            } catch (\LogicException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+        $this->assertSame($before, $this->items()->countByStatus($job->id), 'undo 情報（アイテム）は消えない');
+        $this->assertTrue($this->service()->rollback($job->id, $this->blogId, false)->done);
+    }
+
+    #[Test]
+    public function 変換済みを含むジョブのリセットは拒否される(): void
+    {
+        $this->seed();
+        $job = $this->service()->create($this->blogId, 1, ['chunkSize' => 50]);
+        $this->scan($job->id);
+        $this->service()->run($job->id, $this->blogId);
+        $this->jobs()->setStatus($job->id, JobStatus::Scanned);
+
+        $this->expectException(\LogicException::class);
+        $this->service()->updateOptions($job->id, $this->blogId, []);
+    }
 }

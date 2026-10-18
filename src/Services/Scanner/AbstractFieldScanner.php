@@ -100,7 +100,7 @@ abstract class AbstractFieldScanner implements ScannerInterface
             return [];
         }
         $isRev = $table === 'field_rev';
-        $sk = 'CONCAT(field_key, CHAR(1), CONCAT_WS(\'/\', field_eid, field_cid, field_uid, field_bid, field_mid, field_unit_id), CHAR(1), LPAD(field_sort, 10, \'0\')'
+        $sk = 'CONCAT(field_key, CHAR(1), CONCAT_WS(\'/\', IFNULL(field_eid, \'\'), IFNULL(field_cid, \'\'), IFNULL(field_uid, \'\'), IFNULL(field_bid, \'\'), IFNULL(field_mid, \'\'), IFNULL(field_unit_id, \'\')), CHAR(1), LPAD(field_sort, 10, \'0\')'
             . ($isRev ? ', CHAR(1), LPAD(COALESCE(field_rev_id, 0), 10, \'0\')' : '') . ')';
 
         $params = [];

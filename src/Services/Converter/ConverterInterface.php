@@ -22,6 +22,13 @@ interface ConverterInterface
     public function snapshot(LocatorInterface $locator, JobOptions $options): ?array;
 
     /**
+     * 現在の行が持っている元ファイルのパス（item_source_paths と照合・更新するために使う）。行が無ければ null。
+     *
+     * @return list<string>|null
+     */
+    public function currentSourcePaths(LocatorInterface $locator): ?array;
+
+    /**
      * 新規メディアに設定するメタデータ（item_source_paths と同じ順序、同じ個数）
      *
      * @return list<MediaMeta>

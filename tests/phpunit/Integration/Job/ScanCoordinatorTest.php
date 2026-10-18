@@ -261,4 +261,70 @@ final class ScanCoordinatorTest extends A2mTestCase
         $jobId = $this->newJob();
         $this->assertSame(0, $this->scanAll($jobId)['total']);
     }
+
+    #[Test]
+    public function 予期しない例外が起きても_スキャン全体は止まらずエラーとして記録する(): void
+    {
+        $this->archives->put('001/ok.jpg', 'OK');
+        $this->insertColumn('ok', 'image', ['column_field_2' => '001/ok.jpg']);
+        $this->insertColumn('bad', 'image', ['column_field_2' => '001/bad.jpg']);
+        $exploding = new class ($this->unitImageConverter()) implements \Acms\Plugins\ArchivesToMedia\Services\Converter\ConverterInterface {
+            public function __construct(private readonly \Acms\Plugins\ArchivesToMedia\Services\Converter\ConverterInterface $inner)
+            {
+            }
+
+            public function supports(\Acms\Plugins\ArchivesToMedia\Services\Domain\TargetType $target): bool
+            {
+                return $this->inner->supports($target);
+            }
+
+            public function snapshot(\Acms\Plugins\ArchivesToMedia\Services\Domain\Locator\LocatorInterface $locator, JobOptions $options): ?array
+            {
+                if ($locator instanceof \Acms\Plugins\ArchivesToMedia\Services\Domain\Locator\ColumnLocator && $locator->columnId === 'bad') {
+                    throw new \JsonException('Malformed UTF-8');
+                }
+                return $this->inner->snapshot($locator, $options);
+            }
+
+            public function metas(\Acms\Plugins\ArchivesToMedia\Services\Domain\Candidate $candidate, JobOptions $options): array
+            {
+                return $this->inner->metas($candidate, $options);
+            }
+
+            public function currentSourcePaths(\Acms\Plugins\ArchivesToMedia\Services\Domain\Locator\LocatorInterface $locator): ?array
+            {
+                return $this->inner->currentSourcePaths($locator);
+            }
+
+            public function apply(\Acms\Plugins\ArchivesToMedia\Services\Domain\Candidate $candidate, array $mediaIds, JobOptions $options): array
+            {
+                return $this->inner->apply($candidate, $mediaIds, $options);
+            }
+
+            public function restore(\Acms\Plugins\ArchivesToMedia\Services\Domain\Locator\LocatorInterface $locator, array $before, array $after, JobOptions $options): void
+            {
+                $this->inner->restore($locator, $before, $after, $options);
+            }
+        };
+        $coordinator = new ScanCoordinator(
+            [new UnitImageScanner($this->db, $this->blogScope())],
+            [$exploding],
+            $this->resolver(),
+            $this->items(),
+            $this->jobs(),
+        );
+        $jobId = $this->newJob(['targets' => ['unit_image']]);
+
+        $res = ['done' => false, 'total' => 0];
+        for ($i = 0; $i < 10 && !$res['done']; $i++) {
+            $res = $coordinator->scanChunk($this->jobs()->find($jobId) ?? throw new \RuntimeException());
+        }
+
+        $this->assertTrue($res['done']);
+        $this->assertSame(2, $res['total']);
+        $err = $this->items()->byStatuses($jobId, [ItemStatus::Error], 0, 5);
+        $this->assertCount(1, $err);
+        $this->assertSame('UNKNOWN_ERROR', $err[0]->reason);
+        $this->assertCount(1, $this->items()->byStatuses($jobId, [ItemStatus::Pending], 0, 5));
+    }
 }

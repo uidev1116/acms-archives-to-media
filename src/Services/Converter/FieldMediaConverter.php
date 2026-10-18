@@ -42,6 +42,13 @@ class FieldMediaConverter implements ConverterInterface
         return $rows === [] ? null : ['rows' => Snapshot::normalizeRows($rows)];
     }
 
+    public function currentSourcePaths(LocatorInterface $locator): ?array
+    {
+        $loc = $this->requireField($locator);
+        $value = $this->store->valueOf($this->store->family($loc, $loc->key), $loc->key . '@path');
+        return $value === null ? null : [$value];
+    }
+
     public function metas(Candidate $candidate, JobOptions $options): array
     {
         $loc = $this->requireField($candidate->locator);

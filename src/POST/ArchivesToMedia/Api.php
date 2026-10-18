@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\POST\ArchivesToMedia;
 
-use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use ACMS_POST;
 use Acms\Plugins\ArchivesToMedia\Services\Admin\ApiEndpoint;
 use Acms\Services\Facades\Application as App;
-use Acms\Services\Facades\Common;
+use Acms\Services\Facades\Response;
 
 /**
  * 画面からの全操作の入口。ACMS_POST の基底クラスが formToken（CSRF）を検証した後、
@@ -38,7 +37,9 @@ class Api extends ACMS_POST
 
         @set_time_limit(60);
         $result = $endpoint->execute($action, $input, sessionWithAdministration(), BID, (int) SUID);
-        httpStatusCode(Cast::str($result['status']));
-        Common::responseJson($result['body']);
+        // Response::json() はステータスを 200 に固定するので、エラーのステータスを返すために自前で出力する
+        Response::safeHeaders($result['status'], 'application/json');
+        echo json_encode($result['body'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        die();
     }
 }

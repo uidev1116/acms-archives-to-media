@@ -297,4 +297,24 @@ final class RollbackerTest extends A2mTestCase
         $this->assertTrue($res->done);
         $this->assertGreaterThan(0, $res->error);
     }
+
+    #[Test]
+    public function 復元済みなのにステータスが残ったアイテムも_冪等にロールバック済みにする(): void
+    {
+        $this->seed();
+        $original = $this->dump();
+        $jobId = $this->convertedJob();
+        $this->rollbacker()->rollbackChunk($this->job($jobId), false);
+        // コミット後・ステータス更新前に落ちた状況: データは復元済みだが item は converted のまま
+        $this->db->exec('UPDATE ' . $this->db->t('a2m_item') . ' SET item_status = ? WHERE item_job_id = ?', ['converted', $jobId]);
+        $this->jobs()->setStatus($jobId, JobStatus::Failed, 'crash');
+
+        $res = $this->rollbacker()->rollbackChunk($this->job($jobId), false);
+
+        $this->assertTrue($res->done);
+        $this->assertSame(0, $res->error);
+        $this->assertSame(5, $res->converted);
+        $this->assertEquals($original, $this->dump());
+        $this->assertSame([ItemStatus::RolledBack->value => 5], $this->items()->countByStatus($jobId));
+    }
 }

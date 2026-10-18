@@ -198,4 +198,49 @@ final class ArchiveMediaResolverTest extends A2mTestCase
         $this->assertFalse($checker->isReferenced(12));
         $this->assertFalse($checker->isReferenced(8));
     }
+
+    #[Test]
+    public function 登録後の補正が途中で失敗しても_再実行で所属ブログとメタデータが整う(): void
+    {
+        $child = $this->createTestBlog();
+        $this->archives->put('001/a.jpg', 'AAA');
+        $failing = new class ($this->db) extends \Acms\Plugins\ArchivesToMedia\Services\Media\BlogOwnershipFixer {
+            public bool $fail = true;
+
+            public function fix(int $mediaId, int $ownerBlogId): void
+            {
+                if ($this->fail) {
+                    throw new \RuntimeException('timeout');
+                }
+                parent::fix($mediaId, $ownerBlogId);
+            }
+        };
+        $importer = new \Acms\Services\Media\MediaSourceImporter(new \Acms\Services\Storage\Filesystem(), $this->media, $this->archives->dir, 1048576);
+        $resolver = new \Acms\Plugins\ArchivesToMedia\Services\Media\ArchiveMediaResolver(
+            $importer,
+            $this->media,
+            new PathMapRepository($this->db),
+            $this->selector(),
+            $failing,
+            new \Acms\Plugins\ArchivesToMedia\Services\Media\MediaMetaWriter($this->db, $this->media),
+            $this->archives->dir,
+            1048576,
+        );
+        $meta = new MediaMeta('alt', 'cap', true, ['t']);
+
+        try {
+            $resolver->resolve('001/a.jpg', $child, 1, $meta);
+            $this->fail('例外が必要');
+        } catch (\RuntimeException) {
+            $this->assertNull((new PathMapRepository($this->db))->find($child, '001/a.jpg'), '補正まで終わっていないので対応表には記録しない');
+            $this->assertCount(1, $this->media->deleted, '半端な状態のメディアは残さず削除する');
+            $this->assertSame('0', Cast::str($this->db->one('SELECT COUNT(*) FROM ' . $this->db->t('media'))));
+        }
+
+        $failing->fail = false;
+        $res = $resolver->resolve('001/a.jpg', $child, 1, $meta);
+
+        $row = $this->db->row('SELECT media_blog_id, media_field_3 FROM ' . $this->db->t('media') . ' WHERE media_id = ?', [$res->mediaId]);
+        $this->assertSame([(string) $child, 'alt'], [Cast::str($row['media_blog_id'] ?? ''), Cast::str($row['media_field_3'] ?? '')]);
+    }
 }

@@ -100,6 +100,11 @@ class ScanCoordinator
         if (!$job->status->canScan()) {
             throw new \LogicException('このジョブは再スキャンできない状態です: ' . $job->status->value);
         }
+        // 変換済みのアイテムは、ロールバックに必要な before / after を持っているので、消してはいけない
+        $counts = $this->items->countByStatus($job->id);
+        if (($counts[ItemStatus::Converted->value] ?? 0) + ($counts[ItemStatus::RolledBack->value] ?? 0) > 0) {
+            throw new \LogicException('変換済みのアイテムがあるジョブは再スキャンできません。先にロールバックするか、新しいジョブを作ってください。');
+        }
         $this->items->deleteByJob($job->id);
         $this->jobs->setCursor($job->id, null);
         $this->jobs->setStatus($job->id, JobStatus::Draft);
@@ -107,6 +112,16 @@ class ScanCoordinator
     }
 
     private function register(Job $job, Candidate $candidate): void
+    {
+        try {
+            $this->registerCandidate($job, $candidate);
+        } catch (\Throwable $e) {
+            // 1 件の予期しない失敗で、スキャン全体を止めない（同じ行を永久に再試行しないよう、エラーとして記録する）
+            $this->items->insert($job->id, $candidate, 'skip', [], ItemStatus::Error, ReasonCode::UnknownError, $e->getMessage());
+        }
+    }
+
+    private function registerCandidate(Job $job, Candidate $candidate): void
     {
         $converter = $this->converterFor($candidate);
         $before = $converter?->snapshot($candidate->locator, $job->options);

@@ -122,16 +122,19 @@ class ItemRepository
      * 実行前の再スナップショット（スキップ・エラー分の再実行用）
      *
      * @param array<mixed> $before
+     * @param list<string>|null $sourcePaths 現在の元ファイルのパス（スキャン後に差し替えられていても、現在のものを変換するため）
      */
-    public function requeue(int $id, array $before): void
+    public function requeue(int $id, array $before, ?array $sourcePaths = null): void
     {
+        $pathsSql = $sourcePaths === null ? '' : ', item_source_paths = ?';
         $this->db->exec(
             'UPDATE ' . $this->db->t('a2m_item') . '
-             SET item_status = ?, item_reason = \'\', item_message = NULL, item_before = ?, item_updated_datetime = ?
+             SET item_status = ?, item_reason = \'\', item_message = NULL, item_before = ?' . $pathsSql . ', item_updated_datetime = ?
              WHERE item_id = ? AND item_status IN (?, ?)',
             [
                 ItemStatus::Pending->value,
                 json_encode($before, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+                ...($sourcePaths === null ? [] : [json_encode($sourcePaths, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)]),
                 date('Y-m-d H:i:s'),
                 $id,
                 ItemStatus::Skipped->value,

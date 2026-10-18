@@ -306,6 +306,11 @@ final class JobRunnerTest extends A2mTestCase
                 return $this->inner->metas($candidate, $options);
             }
 
+            public function currentSourcePaths(LocatorInterface $locator): ?array
+            {
+                return $this->inner->currentSourcePaths($locator);
+            }
+
             public function apply(Candidate $candidate, array $mediaIds, JobOptions $options): array
             {
                 $this->inner->apply($candidate, $mediaIds, $options);
@@ -424,5 +429,82 @@ final class JobRunnerTest extends A2mTestCase
 
         $mid = Cast::int($this->columnRow('cu')['column_field_1']);
         $this->assertSame((string) $child, Cast::str($this->db->one('SELECT media_blog_id FROM ' . $this->db->t('media') . ' WHERE media_id = ?', [$mid])));
+    }
+
+    #[Test]
+    public function スキャン後に差し替えられたユニットは_再実行で新しいパスを変換する(): void
+    {
+        $this->archives->put('001/a.jpg', 'OLD');
+        $this->archives->put('002/new.jpg', 'NEW');
+        $this->insertColumn('u1', 'image', ['column_field_2' => '001/a.jpg']);
+        $jobId = $this->scannedJob(['targets' => ['unit_image']]);
+        $this->db->exec('UPDATE ' . $this->db->t('column') . ' SET column_field_2 = ? WHERE column_id = ?', ['002/new.jpg', 'u1']);
+
+        $res = $this->runner()->runChunk($this->job($jobId));
+        $this->assertSame('STALE_SNAPSHOT', $res->log[0]['reason']);
+
+        $this->assertSame(1, $this->runner()->requeue($this->job($jobId)));
+        $item = $this->items()->byStatuses($jobId, [ItemStatus::Pending], 0, 1)[0];
+        $this->assertSame(['002/new.jpg'], $item->sourcePaths, '再実行で現在のパスに更新される');
+
+        $this->runner()->runChunk($this->job($jobId));
+        $mid = Cast::int($this->columnRow('u1')['column_field_1']);
+        $this->assertSame(hash('sha256', 'NEW'), $this->db->one('SELECT media_hash FROM ' . $this->db->t('media') . ' WHERE media_id = ?', [$mid]));
+    }
+
+    #[Test]
+    public function 既に変換済みのユニットは_二重に変換しない(): void
+    {
+        $this->archives->put('001/a.jpg', 'A');
+        $this->insertColumn('u1', 'image', ['column_field_1' => 'cap', 'column_field_2' => '001/a.jpg']);
+        $jobId = $this->scannedJob(['targets' => ['unit_image']]);
+        $this->runner()->runChunk($this->job($jobId));
+        $converted = $this->columnRow('u1');
+        $item = $this->items()->byStatuses($jobId, [ItemStatus::Converted], 0, 1)[0];
+        $this->items()->markStatus($item->id, ItemStatus::Error, \Acms\Plugins\ArchivesToMedia\Services\Domain\ReasonCode::UnknownError);
+        $this->items()->requeue($item->id, (array) $this->unitImageConverter()->snapshot($item->locator, JobOptions::defaults()), $item->sourcePaths);
+        $this->jobs()->setStatus($jobId, JobStatus::Paused);
+
+        $res = $this->runner()->runChunk($this->job($jobId));
+
+        $this->assertSame(1, $res->skipped);
+        $this->assertEquals($converted, $this->columnRow('u1'), '変換済みの行は書き換わらない');
+    }
+
+    #[Test]
+    public function トランザクション内でも編集ロックを再確認する(): void
+    {
+        $this->archives->put('001/a.jpg', 'A');
+        $this->insertColumn('u1', 'image', ['column_field_2' => '001/a.jpg']);
+        $jobId = $this->scannedJob(['targets' => ['unit_image']]);
+        $guard = new class ($this->db) extends \Acms\Plugins\ArchivesToMedia\Services\Support\EntryLockGuard {
+            private int $calls = 0;
+
+            public function __construct(\Acms\Plugins\ArchivesToMedia\Services\Support\Db $db)
+            {
+                parent::__construct($db, new \Acms\Services\Entry\Lock('on', 'off', 48));
+            }
+
+            public function isLocked(\Acms\Plugins\ArchivesToMedia\Services\Domain\Locator\LocatorInterface $locator): bool
+            {
+                // 1 回目（書き込み前）は未ロック、2 回目（トランザクション内）でロックされた状況を作る
+                return ++$this->calls >= 2;
+            }
+        };
+        $runner = new \Acms\Plugins\ArchivesToMedia\Services\Job\JobRunner(
+            [$this->unitImageConverter(), $this->unitFileConverter(), $this->fieldConverter()],
+            $this->resolver(),
+            $this->items(),
+            $this->jobs(),
+            $guard,
+            new \Acms\Plugins\ArchivesToMedia\Services\Support\CacheInvalidator($this->db),
+            $this->db,
+            $this->lockFactory(),
+        );
+
+        $res = $runner->runChunk($this->job($jobId));
+
+        $this->assertSame('ENTRY_LOCKED', $res->log[0]['reason']);
+        $this->assertSame('image', $this->columnRow('u1')['column_type']);
     }
 }

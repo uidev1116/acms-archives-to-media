@@ -274,4 +274,17 @@ final class RepositoriesTest extends A2mTestCase
         $map->deleteByMedia($mid);
         $this->assertSame([], $map->mediaIdsCreatedByJob(12));
     }
+
+    #[Test]
+    public function パス対応表は大文字小文字を区別する(): void
+    {
+        $map = new PathMapRepository($this->db);
+        $a = MediaSeeder::seed($this->blogId);
+        $b = MediaSeeder::seed($this->blogId);
+        $map->save($this->blogId, '001/Photo.JPG', $a, 1);
+        $map->save($this->blogId, '001/photo.jpg', $b, 1);
+
+        $this->assertSame($a, $map->find($this->blogId, '001/Photo.JPG'));
+        $this->assertSame($b, $map->find($this->blogId, '001/photo.jpg'));
+    }
 }

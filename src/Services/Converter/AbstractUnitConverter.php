@@ -10,6 +10,7 @@ use Acms\Plugins\ArchivesToMedia\Services\Domain\Locator\ColumnLocator;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Locator\LocatorInterface;
 use Acms\Plugins\ArchivesToMedia\Services\Support\Db;
 use Acms\Plugins\ArchivesToMedia\Services\Support\Snapshot;
+use Acms\Plugins\ArchivesToMedia\Services\Support\UnitData;
 
 /**
  * column / column_rev の行を書き換えるコンバーターの共通処理
@@ -24,6 +25,12 @@ abstract class AbstractUnitConverter implements ConverterInterface
     {
         $row = $this->loadRow($locator);
         return $row === null ? null : ['row' => Snapshot::normalizeRow($row)];
+    }
+
+    public function currentSourcePaths(LocatorInterface $locator): ?array
+    {
+        $row = $this->loadRow($locator);
+        return $row === null ? null : UnitData::explode(Cast::str($row['column_field_2']));
     }
 
     public function restore(LocatorInterface $locator, array $before, array $after, JobOptions $options): void

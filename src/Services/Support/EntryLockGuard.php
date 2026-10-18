@@ -19,6 +19,9 @@ class EntryLockGuard
     {
     }
 
+    /**
+     * @phpstan-impure 他のプロセスがロックを取得・解放するので、呼ぶたびに結果が変わりうる
+     */
     public function isLocked(LocatorInterface $locator): bool
     {
         $entryId = $this->entryOf($locator);
