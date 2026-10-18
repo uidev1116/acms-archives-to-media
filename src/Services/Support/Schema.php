@@ -146,7 +146,7 @@ final class Schema
         if (!$force && $count > 0) {
             throw new \RuntimeException(
                 'ロールバックできる変換済みアイテムが ' . $count . ' 件あります。アンインストールするとロールバックできなくなるため中止しました。'
-                . '先にロールバックするか、不要であれば config.system.php で ARCHIVES_TO_MEDIA_FORCE_UNINSTALL を true に定義してください。'
+                . '先にロールバックするか、不要であれば config.user.php（ablogcms/ 直下）で ARCHIVES_TO_MEDIA_FORCE_UNINSTALL を true に定義してください。'
             );
         }
         foreach (['a2m_item', 'a2m_job', 'a2m_path_map'] as $table) {
