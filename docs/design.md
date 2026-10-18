@@ -592,6 +592,7 @@ private function registerServices(): void
 - 同じ理由で、コアのエイリアス（`media.source-importer` など）を `bind()` / `singleton()` で再登録しません。再登録すると、ほかのプラグインの override / extend も消えてしまいます。
 - GET / POST のハンドラは `App::make('archives-to-media.job-runner')` のように取得し、自分では `new` しません。テストではコンテナに差し替えを登録して、偽物を入れられるようにするためです。
 - コアの Facade（`Media`、`Database`、`Config` など）は、そのまま Facade 経由で使います。
+- ファイルの存在・サイズ・実体パス・パスの安全確認・一時ファイルの確保と削除は、コアのローカルストレージ（`storage` サービス = `LocalStorage` ファサードの実体、`Filesystem`）を使い、`is_file` / `realpath` / `unlink` などを直接呼ばない。例外は一時ファイルへのコピーだけで、`Filesystem::copy()` が隣の `.webp` も複製して一時ファイルの隣に残すため、素の `copy()` を使う。CSV の書き出しはコアに共通部品が無い（CSV インポート用のみ）ので `fputcsv` を使う。
 
 ## 9. エンドポイント
 

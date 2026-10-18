@@ -43,6 +43,17 @@ final class SourcePathSelectorTest extends TestCase
     }
 
     #[Test]
+    public function パスの安全確認とlargeの有無は_コアのFilesystemで行う(): void
+    {
+        $fs = new \Acms\Plugins\ArchivesToMedia\Tests\Support\RecordingFilesystem();
+        $s = new SourcePathSelector($this->dir, $fs);
+        $s->normalize('001/202401/a.jpg');
+        $s->hasLarge('001/202401/a.jpg');
+        $this->assertContains('isSafeRelativePath', $fs->calls);
+        $this->assertContains('isFile', $fs->calls);
+    }
+
+    #[Test]
     public function 画像はlarge接頭辞を除いた通常サイズのパスにそろえる(): void
     {
         $s = new SourcePathSelector($this->dir);

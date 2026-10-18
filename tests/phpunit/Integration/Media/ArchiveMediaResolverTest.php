@@ -285,6 +285,40 @@ final class ArchiveMediaResolverTest extends A2mTestCase
     }
 
     #[Test]
+    public function パスの確認と一時ファイルの扱いは_コアのFilesystemを使い_隣のwebpを一時ファイルに残さない(): void
+    {
+        $this->archives->put('001/a.jpg', 'AAA');
+        $this->archives->put('001/a.jpg.webp', 'WEBP'); // コアの Filesystem::copy は隣の .webp も複製する
+        $fs = new \Acms\Plugins\ArchivesToMedia\Tests\Support\RecordingFilesystem();
+        $importer = new \Acms\Services\Media\MediaSourceImporter($fs, $this->media, $this->archives->dir, 1048576);
+        $resolver = new ArchiveMediaResolver(
+            $importer,
+            $this->media,
+            new PathMapRepository($this->db),
+            new \Acms\Plugins\ArchivesToMedia\Services\Media\SourcePathSelector($this->archives->dir, $fs),
+            new \Acms\Plugins\ArchivesToMedia\Services\Media\BlogOwnershipFixer($this->db),
+            new \Acms\Plugins\ArchivesToMedia\Services\Media\MediaMetaWriter($this->db, $this->media),
+            $this->archives->dir,
+            1048576,
+            $this->db,
+            10,
+            $fs,
+        );
+        $tmpFiles = static function (): array {
+            $found = glob(rtrim(sys_get_temp_dir(), '/') . '/a2m_import_*');
+            return $found === false ? [] : $found;
+        };
+        $before = $tmpFiles();
+
+        $resolver->resolve('001/a.jpg', $this->blogId, 1, new MediaMeta());
+
+        foreach (['isSafeRelativePath', 'isFile', 'safeRealpath', 'validateDirectoryTraversalPath', 'getFileSize', 'uniqueFilePath', 'remove'] as $method) {
+            $this->assertContains($method, $fs->calls, $method . ' を使う');
+        }
+        $this->assertSame($before, $tmpFiles(), '一時ファイル（と .webp）を残さない');
+    }
+
+    #[Test]
     public function ブロックエディターのdata_midによる参照も見つける(): void
     {
         $checker = new MediaReferenceChecker($this->db);

@@ -235,7 +235,7 @@ class ServiceProvider extends ACMS_App
         // コアの media.source-importer は CSV インポート用のベースで登録済みなので流用せず、
         // ARCHIVES_DIR をベースにした専用インスタンスを作る
         App::singleton('archives-to-media.source-importer', static fn () => new MediaSourceImporter(
-            new Filesystem(),
+            self::storage(),
             self::media(),
             $archivesBase(),
             $maxSize(),
@@ -247,18 +247,20 @@ class ServiceProvider extends ACMS_App
             self::get('archives-to-media.source-importer', MediaSourceImporter::class),
             self::media(),
             self::get('archives-to-media.path-map', PathMapRepository::class),
-            new SourcePathSelector($archivesBase()),
+            new SourcePathSelector($archivesBase(), self::storage()),
             new BlogOwnershipFixer(self::db()),
             new MediaMetaWriter(self::db(), self::media()),
             $archivesBase(),
             $maxSize(),
             self::db(),
+            10,
+            self::storage(),
         ));
 
         App::singleton('archives-to-media.converters', static function () use ($archivesBase): array {
             $store = new FieldStore(self::db());
             return [
-                new UnitImageConverter(self::db(), new SourcePathSelector($archivesBase())),
+                new UnitImageConverter(self::db(), new SourcePathSelector($archivesBase(), self::storage())),
                 new UnitFileConverter(self::db()),
                 new FieldMediaConverter($store, new FieldNameResolver(), new FieldGroupAppender($store)),
             ];
@@ -373,6 +375,14 @@ class ServiceProvider extends ACMS_App
     private static function db(): Db
     {
         return self::get('archives-to-media.db', Db::class);
+    }
+
+    /**
+     * コアのローカルストレージ（LocalStorage ファサードの実体）
+     */
+    private static function storage(): Filesystem
+    {
+        return self::get('storage', Filesystem::class);
     }
 
     private static function media(): Helper

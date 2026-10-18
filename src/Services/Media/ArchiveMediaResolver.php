@@ -12,6 +12,7 @@ use Acms\Services\Media\Exceptions\MediaSourceImportException;
 use Acms\Services\Media\Helper;
 use Acms\Services\Media\MediaImportPreview;
 use Acms\Services\Media\MediaSourceImporter;
+use Acms\Services\Storage\Filesystem;
 
 /**
  * archives のパスをメディアに解決する（対応表 → コアの MediaSourceImporter / Media\Helper）。
@@ -20,6 +21,8 @@ use Acms\Services\Media\MediaSourceImporter;
  */
 class ArchiveMediaResolver
 {
+    private readonly Filesystem $fs;
+
     /**
      * コアのメッセージ（例外文）から理由コードを判定するための対応表。上から順に最初に一致したものを使う。
      * コアのメッセージが変わると静かに MEDIA_REGISTER_FAILED へ落ちるので、テストで実在を確認している。
@@ -49,7 +52,9 @@ class ArchiveMediaResolver
         private readonly int $maxFileSize,
         private readonly ?Db $db = null,
         private readonly int $lockTimeout = 10,
+        ?Filesystem $fs = null,
     ) {
+        $this->fs = $fs ?? new Filesystem();
     }
 
     /**
@@ -138,16 +143,20 @@ class ArchiveMediaResolver
     private function precheck(string $relative): void
     {
         $full = $this->baseDir . $relative;
-        if (!is_file($full)) {
-            throw new SourceException(ReasonCode::SourceNotFound);
-        }
-        $real = realpath($full);
-        $baseReal = realpath($this->baseDir);
-        if ($real === false || $baseReal === false || !str_starts_with($real, rtrim($baseReal, '/') . '/')) {
+        // コアの MediaSourceImporter と同じ順序: 先にベース配下かを確かめ（範囲外のパスの存在有無を判別させない）、
+        // そのあと存在、実体（シンボリックリンクの先）の再検証、サイズ
+        if (!$this->fs->validateDirectoryTraversalPath($full, $this->baseDir, false)) {
             throw new SourceException(ReasonCode::SourceForbidden);
         }
-        $size = filesize($real);
-        if ($size === false || $size > $this->maxFileSize) {
+        if (!$this->fs->exists($full) || !$this->fs->isFile($full)) {
+            throw new SourceException(ReasonCode::SourceNotFound);
+        }
+        $real = $this->fs->safeRealpath($full);
+        $baseReal = $this->fs->safeRealpath($this->baseDir);
+        if ($real === false || $baseReal === false || !str_starts_with($real, rtrim($baseReal, '/') . '/') || !$this->fs->validateDirectoryTraversalPath($real, $this->baseDir)) {
+            throw new SourceException(ReasonCode::SourceForbidden);
+        }
+        if ($this->fs->getFileSize($real) > $this->maxFileSize) {
             throw new SourceException(ReasonCode::SourceTooLarge);
         }
     }
@@ -173,16 +182,21 @@ class ArchiveMediaResolver
     private function register(string $source, string $fileName): int
     {
         $ext = pathinfo($source, PATHINFO_EXTENSION);
-        $tmp = rtrim(sys_get_temp_dir(), '/') . '/a2m_' . bin2hex(random_bytes(8)) . ($ext !== '' ? '.' . $ext : '');
-        if (!@copy($this->baseDir . $source, $tmp)) {
-            throw new SourceException(ReasonCode::MediaRegisterFailed, 'ファイルのコピーに失敗しました。');
-        }
+        // 一時ファイルは、コアの uniqueFilePath() で排他的に確保する（推測できない名前の自前生成をやめる）
+        $prefix = rtrim(sys_get_temp_dir(), '/') . '/';
+        $tmp = $prefix . $this->fs->uniqueFilePath('a2m_import_' . bin2hex(random_bytes(8)) . ($ext !== '' ? '.' . $ext : ''), $prefix);
         try {
+            // Filesystem::copy() は隣の .webp も複製して一時ファイルの隣に残してしまうので、ここでは素の copy
+            if (!@copy($this->baseDir . $source, $tmp)) {
+                throw new SourceException(ReasonCode::MediaRegisterFailed, 'ファイルのコピーに失敗しました。');
+            }
             return $this->media->registerLocalFile($tmp, $fileName);
+        } catch (SourceException $e) {
+            throw $e;
         } catch (\Throwable $e) {
             throw $this->translate($e);
         } finally {
-            @unlink($tmp);
+            $this->fs->remove($tmp);
         }
     }
 

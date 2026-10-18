@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Acms\Plugins\ArchivesToMedia\Services\Media;
 
 use Acms\Plugins\ArchivesToMedia\Services\Domain\ReasonCode;
+use Acms\Services\Storage\Filesystem;
 
 /**
  * 取り込むファイルの選択（設計書 §4.1）。large- 版が残っていればそれを優先する。
@@ -19,8 +20,11 @@ class SourcePathSelector
     /**
      * @param string $baseDir ARCHIVES_DIR の絶対パス（末尾スラッシュ付き）
      */
-    public function __construct(private readonly string $baseDir)
+    private readonly Filesystem $fs;
+
+    public function __construct(private readonly string $baseDir, ?Filesystem $fs = null)
     {
+        $this->fs = $fs ?? new Filesystem();
     }
 
     /**
@@ -33,12 +37,12 @@ class SourcePathSelector
     public function normalize(string $path, bool $stripLarge = true): string
     {
         $path = trim($path);
+        // 基本の安全確認（NUL、://、先頭の /、ドライブ名、.. セグメント）はコアの規則を使い、
+        // このプラグイン固有の厳しい条件（バックスラッシュ、file:、. セグメント）だけを足す
         if (
             $path === ''
-            || str_contains($path, "\0")
+            || !$this->fs->isSafeRelativePath($path)
             || str_contains($path, '\\')
-            || str_contains($path, '://')
-            || $path[0] === '/'
             || str_starts_with($path, 'file:')
             || preg_match('#(^|/)\.\.?(/|$)#', $path) === 1
         ) {
@@ -63,7 +67,7 @@ class SourcePathSelector
 
     public function hasLarge(string $normalized): bool
     {
-        return is_file($this->baseDir . $this->largePath($normalized));
+        return $this->fs->isFile($this->baseDir . $this->largePath($normalized));
     }
 
     /**
