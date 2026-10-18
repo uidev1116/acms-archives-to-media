@@ -1,21 +1,58 @@
-# Keep the GitHub Actions used by the workflows up to date. Actions are pinned to commit SHAs
-# (the trailing "# vN" comment is what Dependabot rewrites), so a moved tag cannot change what CI runs. Patch and minor bumps are auto-merged
-# by .github/workflows/dependabot-auto-merge.yml once CI passes; major bumps are reviewed by hand.
+# Keeps GitHub Actions, npm (admin UI) and Composer (dev tools) up to date.
 #
-# Composer is intentionally not tracked: this plugin commits no composer.lock, so Dependabot could
-# only ever propose major constraint bumps here (the dev-tool constraints are loose caret ranges) —
-# low value. ablogcms/testing-framework is version-matched to a-blog cms by hand anyway. Generated
-# plugins commit their own lock and can enable Composer tracking themselves if they want it.
+# - github-actions: every action is pinned to a commit SHA (the trailing "# vN" comment is what Dependabot
+#   rewrites), so a moved tag cannot change what CI runs. Patch and minor bumps are auto-merged by
+#   .github/workflows/dependabot-auto-merge.yml once CI passes; everything else is reviewed by hand.
+# - npm: the admin UI bundles React and @ablogcms/components and runs with administrator privileges, so these PRs
+#   are never auto-merged. Held back on purpose (see README): eslint and @eslint/js stay on 9 until
+#   eslint-plugin-jsx-a11y supports 10, typescript stays on 6.0 until typescript-eslint supports 6.1+.
+# - composer: dev tools only (the plugin has no runtime Composer dependencies). ablogcms/testing-framework is
+#   version-matched to the a-blog cms minor by hand (see the CI matrix), so it is ignored here.
 version: 2
 updates:
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: 'github-actions'
+    directory: '/'
     schedule:
-      interval: "weekly"
+      interval: 'weekly'
     groups:
       github-actions:
         patterns:
-          - "*"
+          - '*'
         update-types:
-          - "minor"
-          - "patch"
+          - 'minor'
+          - 'patch'
+
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    ignore:
+      - dependency-name: 'eslint'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@eslint/js'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major', 'version-update:semver-minor']
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+    groups:
+      npm-minor-patch:
+        patterns:
+          - '*'
+        update-types:
+          - 'minor'
+          - 'patch'
+
+  - package-ecosystem: 'composer'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    ignore:
+      - dependency-name: 'ablogcms/testing-framework'
+    groups:
+      composer-minor-patch:
+        patterns:
+          - '*'
+        update-types:
+          - 'minor'
+          - 'patch'
