@@ -35,8 +35,11 @@ export function useChunkRunner<R extends { done: boolean }>(
   const mountedRef = useRef(true);
   const stepRef = useRef(step);
   const onResultRef = useRef(options.onResult);
-  stepRef.current = step;
-  onResultRef.current = options.onResult;
+  // 最新の step / onResult を ref に反映する（レンダー中に ref を書き換えない。start() は effect かイベントから呼ばれる）
+  useEffect(() => {
+    stepRef.current = step;
+    onResultRef.current = options.onResult;
+  });
 
   useEffect(() => {
     mountedRef.current = true;

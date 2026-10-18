@@ -88,6 +88,8 @@ export function ItemTable({
   }, [api, jobId, applied, pageNo]);
 
   useEffect(() => {
+    // サーバーから読んで、await のあとで state に入れる（外部システムとの同期）。同期的な setState ではない
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load, reloadKey, version]);
 

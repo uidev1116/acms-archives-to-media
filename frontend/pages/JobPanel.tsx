@@ -61,6 +61,8 @@ export function JobPanel({ jobId, onChanged, allowDelete = false, onDeleted }: P
   }, [api, jobId]);
 
   useEffect(() => {
+    // 表示時にサーバーから概要を読む（await のあとで state に入れる）
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
 

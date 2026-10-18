@@ -44,6 +44,8 @@ export function ScanStep({ jobId, onBack, onProceed }: Props) {
   }, [runner]);
 
   useEffect(() => {
+    // スキャン完了後にサーバーから概要を読む（await のあとで state に入れる）
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (runner.finished) void loadDetail();
   }, [runner.finished, loadDetail]);
 
