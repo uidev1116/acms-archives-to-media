@@ -177,6 +177,15 @@ npm run test:coverage              # Vitest（カバレッジ 90% 以上）
 
 PHP のカバレッジは pcov または Xdebug で `vendor/bin/phpunit --coverage-text` を実行します。
 
+### フロントエンドの開発環境
+
+- Node.js 22（`.nvmrc`）。`npm ci` で依存と Git フックが入ります（husky）。
+- **コミット時**（`pre-commit`）: 変更したファイルに lint-staged で ESLint（`--fix`）・Prettier・Stylelint を自動実行します。
+- **push 時**（`pre-push`）: 型チェックと vitest を実行します。
+- `npm run lint`（チェックのみ）／`npm run lint:fix`（自動修正）／`npm run check`（lint + 型チェック + テスト）。
+- ESLint は typescript-eslint・react-hooks・jsx-a11y（アクセシビリティ）を有効にし、整形のルールは Prettier に任せています（eslint-config-prettier）。`.editorconfig` でエディターの設定をそろえます。
+- フックを一時的に飛ばすときは `HUSKY=0 git commit ...`。CI（`npm run lint` など）では必ずチェックされます。
+
 ### E2E（Playwright、ローカル専用）
 
 実際の管理画面で「設定 → スキャン → 実行（一時停止・再開）→ 結果 → ロールバック → CSV」を通しで確認します。ローカルの a-blog cms と Docker の DB が必要なため、CI では実行しません。
