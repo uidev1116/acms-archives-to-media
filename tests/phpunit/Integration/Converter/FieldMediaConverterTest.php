@@ -277,4 +277,27 @@ final class FieldMediaConverterTest extends A2mTestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->fieldConverter()->snapshot(new ColumnLocator('x'), JobOptions::defaults());
     }
+
+    #[Test]
+    public function 大文字小文字だけ違うフィールドは別物として扱い_巻き添えにしない(): void
+    {
+        $this->insertImageField('Photo', '001/upper.jpg', 1, 'upper');
+        $this->insertImageField('photo', '001/lower.jpg', 1, 'lower');
+        $original = $this->db->all('SELECT * FROM ' . $this->db->t('field') . ' WHERE field_eid = ? ORDER BY field_key, field_sort', [$this->entryId]);
+        $opts = JobOptions::fromArray(['field' => ['mode' => 'same']]);
+        $conv = $this->fieldConverter();
+        $loc = $this->locator('photo');
+        $before = $conv->snapshot($loc, $opts);
+
+        $after = $conv->apply($this->candidate('photo'), [9], $opts);
+
+        $now = $this->valuesByKey();
+        $this->assertSame('001/upper.jpg', $now['Photo@path#1'], '大文字の Photo は変わらない');
+        $this->assertSame('upper', $now['Photo@alt#1']);
+        $this->assertArrayNotHasKey('photo@path#1', $now);
+        $this->assertSame('9', $now['photo#1']);
+
+        $conv->restore($loc, (array) $before, $after, $opts);
+        $this->assertEquals($original, $this->db->all('SELECT * FROM ' . $this->db->t('field') . ' WHERE field_eid = ? ORDER BY field_key, field_sort', [$this->entryId]));
+    }
 }

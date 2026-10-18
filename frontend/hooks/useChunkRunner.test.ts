@@ -1,4 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { StrictMode, createElement } from 'react';
+import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../api/client';
 import { useChunkRunner } from './useChunkRunner';
@@ -136,5 +138,28 @@ describe('useChunkRunner', () => {
     expect(result.current.finished).toBe(false);
     expect(result.current.paused).toBe(false);
     expect(result.current.error).toBeNull();
+  });
+
+  it('StrictMode の再マウント（クリーンアップ→再実行）でもループが止まらない', async () => {
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(StrictMode, null, children);
+    const gate = deferred<R>();
+    const step = vi
+      .fn<() => Promise<R>>()
+      .mockReturnValueOnce(gate.promise)
+      .mockResolvedValueOnce({ done: true, n: 2 });
+    const { result } = renderHook(() => useChunkRunner<R>(step), { wrapper });
+
+    let started!: Promise<void>;
+    act(() => {
+      started = result.current.start();
+    });
+    await act(async () => {
+      gate.resolve({ done: false, n: 1 });
+      await started;
+    });
+
+    expect(step).toHaveBeenCalledTimes(2);
+    expect(result.current.finished).toBe(true);
   });
 });

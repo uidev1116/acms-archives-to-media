@@ -67,6 +67,7 @@ describe('RunStep', () => {
     });
     const client = fakeClient({
       run: [() => first, chunk({ status: 'completed', done: true, remaining: 0 })],
+      pause: { job: {} },
     });
     const onFinished = vi.fn();
     renderWithApi(<RunStep jobId={4} total={4} onFinished={onFinished} />, client);
@@ -78,6 +79,12 @@ describe('RunStep', () => {
       await screen.findByText('一時停止中です。タブを閉じても、ジョブの画面から再開できます。'),
     ).toBeInTheDocument();
     expect(onFinished).not.toHaveBeenCalled();
+    // 一時停止はサーバーにも記録する（タブを閉じても「実行中」のままにしない）
+    await waitFor(() =>
+      expect(client.calls.filter((c) => c.action === 'pause')).toEqual([
+        { action: 'pause', params: { jobId: 4 } },
+      ]),
+    );
 
     await userEvent.click(screen.getByRole('button', { name: '再開' }));
     await waitFor(() => expect(onFinished).toHaveBeenCalledTimes(1));
@@ -96,6 +103,32 @@ describe('RunStep', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('別の処理が実行中');
     await userEvent.click(screen.getByRole('button', { name: '再試行' }));
     await waitFor(() => expect(onFinished).toHaveBeenCalledTimes(1));
+  });
+
+  it('一時停止の記録に失敗しても画面は止まったままで、エラーにしない', async () => {
+    let release!: (v: ChunkResult) => void;
+    const first = new Promise<ChunkResult>((r) => {
+      release = r;
+    });
+    const client = fakeClient({ run: [() => first], pause: new ApiError('x', 500, 'internal') });
+    renderWithApi(<RunStep jobId={4} total={4} onFinished={vi.fn()} />, client);
+    await userEvent.click(await screen.findByRole('button', { name: '一時停止' }));
+    release(chunk({ remaining: 2 }));
+    expect(await screen.findByRole('button', { name: '再開' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('ロールバックの一時停止は pause を呼ばない', async () => {
+    let release!: (v: ChunkResult) => void;
+    const first = new Promise<ChunkResult>((r) => {
+      release = r;
+    });
+    const client = fakeClient({ rollback: [() => first] });
+    renderWithApi(<RunStep jobId={4} total={4} action="rollback" onFinished={vi.fn()} />, client);
+    await userEvent.click(await screen.findByRole('button', { name: '一時停止' }));
+    release(chunk({ status: 'rolling_back', remaining: 2 }));
+    expect(await screen.findByRole('button', { name: '再開' })).toBeInTheDocument();
+    expect(client.calls.some((c) => c.action === 'pause')).toBe(false);
   });
 
   it('ロールバックでは rollback を呼び、追加パラメーターを渡す', async () => {

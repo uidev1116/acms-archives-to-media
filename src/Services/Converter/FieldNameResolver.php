@@ -11,18 +11,6 @@ use Acms\Plugins\ArchivesToMedia\Services\Domain\JobOptions;
  */
 class FieldNameResolver
 {
-    /** 画像フィールドが持つ旧キーの接尾辞 */
-    public const LEGACY_IMAGE = [
-        'path', 'x', 'y', 'alt', 'fileSize',
-        'largePath', 'largeX', 'largeY', 'largeAlt', 'largeFileSize',
-        'tinyPath', 'tinyX', 'tinyY', 'tinyAlt', 'tinyFileSize',
-        'squarePath', 'squareX', 'squareY', 'squareAlt', 'squareFileSize',
-        'secret',
-    ];
-
-    /** ファイルフィールドが持つ旧キーの接尾辞 */
-    public const LEGACY_FILE = ['path', 'baseName', 'fileSize', 'secret', 'originalName', 'downloadName'];
-
     public function resolve(string $fd, JobOptions $options): string
     {
         return match ($options->fieldMode) {

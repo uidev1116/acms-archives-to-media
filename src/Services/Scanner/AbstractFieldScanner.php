@@ -44,11 +44,6 @@ abstract class AbstractFieldScanner implements ScannerInterface
      */
     abstract protected function accepts(array $rows, string $fd): bool;
 
-    /**
-     * @return list<string> 旧キーの接尾辞
-     */
-    abstract protected function legacySuffixes(): array;
-
     public function scan(JobOptions $options, int $blogId, ?string $cursor, int $limit): array
     {
         $state = $this->parseCursor($cursor);

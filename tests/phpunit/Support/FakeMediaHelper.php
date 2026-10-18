@@ -63,8 +63,14 @@ final class FakeMediaHelper extends Helper
     /** @var list<int> */
     public array $deleted = [];
 
+    /** @var list<int> 削除に失敗させる media_id */
+    public array $failDelete = [];
+
     public function deleteItem($mid)
     {
+        if (in_array($mid, $this->failDelete, true)) {
+            throw new \RuntimeException('You are not authorized to delete media.');
+        }
         $this->deleted[] = $mid;
         Database::query(['sql' => 'DELETE FROM ' . DB_PREFIX . 'media WHERE media_id = ?', 'params' => [$mid]], 'exec');
     }

@@ -44,6 +44,16 @@ export function RunStep({ jobId, total, onFinished, action = 'run', extraParams 
     void runner.start();
   }, [runner]);
 
+  // 一時停止はサーバーにも記録する。記録に失敗しても画面は止まっているので、エラーにはしない。
+  const pausedSent = useRef(false);
+  useEffect(() => {
+    if (runner.paused && action === 'run' && !pausedSent.current) {
+      pausedSent.current = true;
+      api.call('pause', { jobId }).catch(() => undefined);
+    }
+    if (!runner.paused) pausedSent.current = false;
+  }, [runner.paused, action, api, jobId]);
+
   const finishedRef = useRef(false);
   useEffect(() => {
     if (runner.finished && !finishedRef.current) {

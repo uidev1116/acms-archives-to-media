@@ -20,6 +20,7 @@ class AdminApi
      * @param array<string, mixed> $input
      * @return array<string, mixed>
      * @throws \InvalidArgumentException 入力が不正
+     * @throws \Acms\Plugins\ArchivesToMedia\Services\Job\ForbiddenException 必要な権限が無い
      * @throws \Acms\Plugins\ArchivesToMedia\Services\Job\JobNotFoundException
      * @throws \Acms\Plugins\ArchivesToMedia\Services\Job\JobBusyException 同じブログで別の処理が実行中
      * @throws \LogicException 今の状態では実行できない操作

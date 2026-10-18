@@ -10,6 +10,7 @@ use Acms\Plugins\ArchivesToMedia\Services\Admin\DefinitionProvider;
 use Acms\Plugins\ArchivesToMedia\Services\Converter\FieldNameResolver;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\ItemStatus;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\JobStatus;
+use Acms\Plugins\ArchivesToMedia\Services\Job\ForbiddenException;
 use Acms\Plugins\ArchivesToMedia\Services\Job\JobNotFoundException;
 use Acms\Plugins\ArchivesToMedia\Services\Job\JobService;
 use Acms\Plugins\ArchivesToMedia\Services\Job\ScanCoordinator;
@@ -24,8 +25,12 @@ use PHPUnit\Framework\Attributes\Test;
 
 final class JobServiceTest extends A2mTestCase
 {
+    /** @var \Closure(int): bool */
+    private \Closure $canAdminister;
+
     private function service(): JobService
     {
+        $this->canAdminister ??= static fn (int $blogId): bool => true;
         $store = new FieldStore($this->db);
         $names = new FieldNameResolver();
         $converters = [$this->unitImageConverter(), $this->unitFileConverter(), $this->fieldConverter()];
@@ -48,6 +53,8 @@ final class JobServiceTest extends A2mTestCase
             $this->runner($converters),
             $this->rollbacker($converters),
             new AuditLog(),
+            $this->blogScope(),
+            $this->canAdminister,
         );
     }
 
@@ -91,6 +98,52 @@ final class JobServiceTest extends A2mTestCase
 
         $this->expectException(\InvalidArgumentException::class);
         $this->service()->create($this->blogId, 7, ['targets' => ['nope']]);
+    }
+
+    #[Test]
+    public function 子ブログを含めるジョブは_子孫ブログすべての管理権限が必要(): void
+    {
+        $parent = $this->createTestBlog(['blog_left' => 1, 'blog_right' => 6]);
+        $this->createTestBlog(['blog_parent' => $parent, 'blog_left' => 2, 'blog_right' => 3]);
+        $childB = $this->createTestBlog(['blog_parent' => $parent, 'blog_left' => 4, 'blog_right' => 5]);
+        $checked = [];
+        $this->canAdminister = static function (int $blogId) use (&$checked, $childB): bool {
+            $checked[] = $blogId;
+            return $blogId !== $childB;
+        };
+
+        try {
+            $this->service()->create($parent, 1, ['includeChildBlogs' => true]);
+            $this->fail('権限が無い子ブログがあるので拒否される');
+        } catch (ForbiddenException) {
+            $this->assertContains($childB, $checked);
+            $this->assertSame(0, $this->jobs()->paginate($parent, 1, 10)['total'], 'ジョブは作られない');
+        }
+
+        $this->canAdminister = static fn (int $blogId): bool => true;
+        $job = $this->service()->create($parent, 1, ['includeChildBlogs' => true]);
+        $this->assertTrue($job->options->includeChildBlogs);
+    }
+
+    #[Test]
+    public function 子ブログを含めないジョブでは子孫の権限を確認しない(): void
+    {
+        $parent = $this->createTestBlog(['blog_left' => 1, 'blog_right' => 4]);
+        $this->createTestBlog(['blog_parent' => $parent, 'blog_left' => 2, 'blog_right' => 3]);
+        $this->canAdminister = static fn (int $blogId): bool => false;
+        $this->assertSame($parent, $this->service()->create($parent, 1, [])->blogId);
+    }
+
+    #[Test]
+    public function オプション更新でも子ブログの権限を確認する(): void
+    {
+        $parent = $this->createTestBlog(['blog_left' => 1, 'blog_right' => 4]);
+        $this->createTestBlog(['blog_parent' => $parent, 'blog_left' => 2, 'blog_right' => 3]);
+        $job = $this->service()->create($parent, 1, []);
+        $this->canAdminister = static fn (int $blogId): bool => false;
+
+        $this->expectException(ForbiddenException::class);
+        $this->service()->updateOptions($job->id, $parent, ['includeChildBlogs' => true]);
     }
 
     #[Test]

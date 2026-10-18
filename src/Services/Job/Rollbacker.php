@@ -77,12 +77,17 @@ class Rollbacker
 
             $remaining = count($this->items->nextConverted($job->id, 1));
             $done = $remaining === 0;
+            $deleteFailures = [];
             if ($done && $deleteCreatedMedia) {
-                $this->deleteUnreferencedMedia($job->id);
+                $deleteFailures = $this->deleteUnreferencedMedia($job->id);
             }
             $this->jobs->refreshCounts($job->id);
             if ($done) {
-                $this->jobs->setStatus($job->id, JobStatus::RolledBack);
+                $this->jobs->setStatus(
+                    $job->id,
+                    JobStatus::RolledBack,
+                    $deleteFailures === [] ? null : 'メディアを削除できませんでした（media_id: ' . implode(', ', $deleteFailures) . '）。メディア管理から手動で整理してください。'
+                );
             }
         } catch (\Throwable $e) {
             $this->jobs->setStatus($job->id, JobStatus::Failed, $e->getMessage());
@@ -141,15 +146,27 @@ class Rollbacker
         return ['status' => 'error', 'reason' => $reason->value, 'message' => $message];
     }
 
-    private function deleteUnreferencedMedia(int $jobId): void
+    /**
+     * 削除できなかったメディアがあっても残りを続ける（ロールバック自体はもう終わっている）。
+     *
+     * @return list<int> 削除に失敗した media_id
+     */
+    private function deleteUnreferencedMedia(int $jobId): array
     {
+        $failed = [];
         foreach ($this->pathMap->mediaIdsCreatedByJob($jobId) as $mediaId) {
             if ($this->references->isReferenced($mediaId)) {
                 continue;
             }
-            $this->media->deleteItem($mediaId);
+            try {
+                $this->media->deleteItem($mediaId);
+            } catch (\Throwable) {
+                $failed[] = $mediaId;
+                continue;
+            }
             $this->pathMap->deleteByMedia($mediaId);
         }
+        return $failed;
     }
 
     private function converterFor(Item $item): ?ConverterInterface

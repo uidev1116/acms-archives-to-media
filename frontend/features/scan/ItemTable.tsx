@@ -167,6 +167,7 @@ export function ItemTable({
           </ButtonV2>
           <ButtonV2
             size="small"
+            disabled={Object.keys(activeFilter(applied)).length === 0}
             onClick={() => void exclude({ filter: activeFilter(applied), excluded: true })}
           >
             絞り込み結果をすべて除外

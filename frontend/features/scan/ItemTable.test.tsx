@@ -122,6 +122,12 @@ describe('ItemTable', () => {
     });
   });
 
+  it('絞り込みが無いときは、まとめて除外のボタンを押せない（全件を誤って除外しない）', async () => {
+    renderWithApi(<ItemTable jobId={3} editable />, fakeClient({ items: page([row(1)]) }));
+    await screen.findByText('001/1.jpg');
+    expect(screen.getByRole('button', { name: '絞り込み結果をすべて除外' })).toBeDisabled();
+  });
+
   it('現在の絞り込み結果をまとめて除外できる', async () => {
     const client = fakeClient({ items: page([row(1)]), exclude: { updated: 12 } });
     renderWithApi(<ItemTable jobId={3} editable />, client);

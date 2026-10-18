@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Services\Admin;
 
+use Acms\Plugins\ArchivesToMedia\Services\Job\ForbiddenException;
 use Acms\Plugins\ArchivesToMedia\Services\Job\JobBusyException;
 use Acms\Plugins\ArchivesToMedia\Services\Job\JobNotFoundException;
 use Acms\Plugins\ArchivesToMedia\Services\Support\AuditLog;
@@ -39,6 +40,8 @@ class ApiEndpoint
             return ['status' => 200, 'body' => $this->api->handle($action, $input, $blogId, $userId)];
         } catch (\InvalidArgumentException $e) {
             return $this->error(422, 'invalid', $e->getMessage());
+        } catch (ForbiddenException $e) {
+            return $this->error(403, 'forbidden', $e->getMessage());
         } catch (JobNotFoundException $e) {
             return $this->error(404, 'not_found', $e->getMessage());
         } catch (JobBusyException $e) {

@@ -24,14 +24,20 @@ class Db
     /**
      * @param list<scalar|null> $params
      * @return list<array<string, mixed>>
+     * @throws \PDOException クエリに失敗したとき
      */
     public function all(string $sql, array $params = []): array
     {
-        $rows = Database::query(['sql' => $sql, 'params' => $params], 'all');
-        if (!is_array($rows)) {
-            throw new \RuntimeException('DB query failed.');
+        // コアの Database::query() は、読み取りに失敗しても例外を投げず空配列を返す。
+        // 「失敗」を「該当なし」と取り違えると、実行が途中で Completed になるなど危険なので、PDO を直接使って例外を伝える。
+        $pdo = Database::connection();
+        if (!$pdo instanceof \PDO) {
+            throw new \RuntimeException('DB connection is not available.');
         }
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
         /** @var list<array<string, mixed>> $rows */
+        $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
         return $rows;
     }
 

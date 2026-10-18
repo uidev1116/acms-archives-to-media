@@ -304,6 +304,8 @@ class ServiceProvider extends ACMS_App
             self::get('archives-to-media.job-runner', JobRunner::class),
             self::get('archives-to-media.rollbacker', Rollbacker::class),
             self::get('archives-to-media.audit-log', AuditLog::class),
+            self::get('archives-to-media.blog-scope', BlogScope::class),
+            static fn (int $blogId): bool => sessionWithAdministration($blogId),
         ));
         App::singleton('archives-to-media.admin-api', static fn () => new AdminApi(
             self::get('archives-to-media.job-service', JobService::class),

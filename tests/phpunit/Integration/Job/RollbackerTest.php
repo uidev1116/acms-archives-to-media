@@ -172,6 +172,30 @@ final class RollbackerTest extends A2mTestCase
     }
 
     #[Test]
+    public function メディアの削除に失敗しても他は削除し_ジョブは完了して失敗を記録する(): void
+    {
+        $this->seed();
+        $jobId = $this->convertedJob();
+        $created = (new PathMapRepository($this->db))->mediaIdsCreatedByJob($jobId);
+        sort($created);
+        $stuck = $created[0];
+        $this->media->failDelete = [$stuck];
+
+        $res = $this->rollbacker()->rollbackChunk($this->job($jobId), true);
+
+        $this->assertTrue($res->done);
+        $job = $this->job($jobId);
+        $this->assertSame(JobStatus::RolledBack, $job->status);
+        $this->assertStringContainsString((string) $stuck, (string) $job->message);
+        $expected = array_values(array_diff($created, [$stuck]));
+        $deleted = $this->media->deleted;
+        sort($deleted);
+        $this->assertSame($expected, $deleted);
+        // 失敗した分は対応表に残る（次回の再利用・手動での整理のため）
+        $this->assertNotNull($this->db->row('SELECT 1 FROM ' . $this->db->t('a2m_path_map') . ' WHERE map_media_id = ?', [$stuck]));
+    }
+
+    #[Test]
     public function 削除オプションがオフならメディアは残る(): void
     {
         $this->seed();

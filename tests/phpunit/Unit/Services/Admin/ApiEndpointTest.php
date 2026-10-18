@@ -6,6 +6,7 @@ namespace Acms\Plugins\ArchivesToMedia\Tests\Unit\Services\Admin;
 
 use Acms\Plugins\ArchivesToMedia\Services\Admin\AdminApi;
 use Acms\Plugins\ArchivesToMedia\Services\Admin\ApiEndpoint;
+use Acms\Plugins\ArchivesToMedia\Services\Job\ForbiddenException;
 use Acms\Plugins\ArchivesToMedia\Services\Job\JobBusyException;
 use Acms\Plugins\ArchivesToMedia\Services\Job\JobNotFoundException;
 use Acms\Plugins\ArchivesToMedia\Services\Support\AuditLog;
@@ -73,6 +74,7 @@ final class ApiEndpointTest extends TestCase
         $cases = [
             [new \InvalidArgumentException('bad'), 422, 'invalid'],
             [new JobNotFoundException('nf'), 404, 'not_found'],
+            [new ForbiddenException('no'), 403, 'forbidden'],
             [new JobBusyException('busy'), 409, 'busy'],
             [new \LogicException('state'), 409, 'state'],
             [new \RuntimeException('boom'), 500, 'internal'],

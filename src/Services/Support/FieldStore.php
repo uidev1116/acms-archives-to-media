@@ -47,7 +47,7 @@ class FieldStore
         [$owner, $params] = $this->ownerWhere($locator);
         return $this->db->all(
             'SELECT * FROM ' . $this->db->t($locator->table()) . '
-             WHERE ' . $owner . ' AND field_sort = ? AND (field_key = ? OR field_key LIKE ?)
+             WHERE ' . $owner . ' AND field_sort = ? AND (BINARY field_key = BINARY ? OR BINARY field_key LIKE BINARY ?)
              ORDER BY field_key',
             [...$params, $locator->sort, $fd, $this->db->escapeLike($fd) . '@%']
         );
@@ -82,7 +82,7 @@ class FieldStore
         [$owner, $params] = $this->ownerWhere($locator);
         $this->db->exec(
             'DELETE FROM ' . $this->db->t($locator->table()) . '
-             WHERE ' . $owner . ' AND field_sort = ? AND (field_key = ? OR field_key LIKE ?)',
+             WHERE ' . $owner . ' AND field_sort = ? AND (BINARY field_key = BINARY ? OR BINARY field_key LIKE BINARY ?)',
             [...$params, $locator->sort, $fd, $this->db->escapeLike($fd) . '@%']
         );
     }
@@ -100,7 +100,7 @@ class FieldStore
         [$owner, $params] = $this->ownerWhere($locator);
         $this->db->exec(
             'DELETE FROM ' . $this->db->t($locator->table()) . '
-             WHERE ' . $owner . ' AND field_sort = ? AND field_key IN (' . $this->db->placeholders($keys) . ')',
+             WHERE ' . $owner . ' AND field_sort = ? AND BINARY field_key IN (' . $this->db->placeholders($keys) . ')',
             [...$params, $locator->sort, ...$keys]
         );
     }
@@ -159,7 +159,7 @@ class FieldStore
             if ($v === null) {
                 $where[] = $column . ' IS NULL';
             } else {
-                $where[] = $column . ' = ?';
+                $where[] = 'BINARY ' . $column . ' = BINARY ?';
                 $params[] = Cast::str($v);
             }
         }

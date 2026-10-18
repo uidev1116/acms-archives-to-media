@@ -13,6 +13,7 @@ use Acms\Plugins\ArchivesToMedia\Services\Domain\ReasonCode;
 use Acms\Plugins\ArchivesToMedia\Services\Repository\ItemRepository;
 use Acms\Plugins\ArchivesToMedia\Services\Repository\JobRepository;
 use Acms\Plugins\ArchivesToMedia\Services\Support\AuditLog;
+use Acms\Plugins\ArchivesToMedia\Services\Support\BlogScope;
 
 /**
  * 画面（AdminApi）から使う操作のまとめ役。
@@ -27,6 +28,9 @@ class JobService
         private readonly JobRunner $runner,
         private readonly Rollbacker $rollbacker,
         private readonly AuditLog $log,
+        private readonly BlogScope $scope,
+        /** @var \Closure(int): bool 指定ブログの管理権限があるか（sessionWithAdministration($bid)） */
+        private readonly \Closure $canAdminister,
     ) {
     }
 
@@ -37,6 +41,7 @@ class JobService
     public function create(int $blogId, int $userId, array $options): Job
     {
         $parsed = JobOptions::fromArray($options);
+        $this->assertCanAdminister($blogId, $parsed);
         $id = $this->jobs->create($blogId, $userId, $parsed);
         $this->log->info('ジョブを作成しました', ['jobId' => $id, 'blogId' => $blogId, 'userId' => $userId, 'options' => $parsed->toArray()]);
         return $this->jobFor($id, $blogId);
@@ -88,6 +93,7 @@ class JobService
     {
         $job = $this->jobFor($jobId, $blogId);
         $parsed = JobOptions::fromArray($options);
+        $this->assertCanAdminister($blogId, $parsed);
         $this->scanner->reset($job);
         $this->jobs->setOptions($jobId, $parsed);
         return $this->jobFor($jobId, $blogId);
@@ -200,6 +206,23 @@ class JobService
         $csv = (string) stream_get_contents($out);
         fclose($out);
         return "\xEF\xBB\xBF" . $csv;
+    }
+
+    /**
+     * 子ブログを含める場合は、含める全ブログへの管理権限を確認する（設計書 §12）。
+     *
+     * @throws ForbiddenException
+     */
+    private function assertCanAdminister(int $blogId, JobOptions $options): void
+    {
+        if (!$options->includeChildBlogs) {
+            return;
+        }
+        foreach ($this->scope->blogIds($blogId, true) as $id) {
+            if (!($this->canAdminister)($id)) {
+                throw new ForbiddenException('子ブログ（ID: ' . $id . '）の管理権限がありません。');
+            }
+        }
     }
 
     private function csvCell(mixed $value): string

@@ -40,6 +40,8 @@ export function useChunkRunner<R extends { done: boolean }>(
 
   useEffect(() => {
     mountedRef.current = true;
+    // StrictMode（開発時）はクリーンアップ→再実行を挟むので、停止要求を持ち越さない
+    stopRef.current = false;
     return () => {
       mountedRef.current = false;
       stopRef.current = true;
