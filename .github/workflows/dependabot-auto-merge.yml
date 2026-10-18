@@ -3,9 +3,10 @@ name: Dependabot auto-merge
 # Auto-merge Dependabot PRs for patch and minor updates once the required checks pass.
 # Major updates are left for manual review.
 #
-# Only GitHub Actions are tracked (see .github/dependabot.yml), and every action is pinned to a commit SHA.
-# npm / composer dependencies are NOT auto-merged: the admin UI bundles React and @ablogcms/components and runs
-# with administrator privileges, so those updates are reviewed by hand (CI runs `npm audit` on every push).
+# Only GitHub Actions PRs are auto-merged (every action is pinned to a commit SHA). npm / Composer PRs are also
+# opened by Dependabot (see .github/dependabot.yml) but are NOT auto-merged: the admin UI bundles React and
+# @ablogcms/components and runs with administrator privileges, so those updates are reviewed by hand
+# (CI runs `npm audit` on every push).
 #
 # Requires (in repo Settings): "Allow auto-merge" enabled, and a branch protection rule on the
 # default branch with the Test workflow as a required status check — otherwise --auto has no check
@@ -27,8 +28,11 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Enable auto-merge for patch/minor updates
-        if: steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor'
+      - name: Enable auto-merge for patch/minor updates of GitHub Actions
+        if: >-
+          steps.metadata.outputs.package-ecosystem == 'github_actions' &&
+          (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor')
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
