@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { chromium } from '@playwright/test';
 
 /**
- * 1. 動作確認用の子ブログ（a2m-test）を未変換の状態に作り直す（docs/verification/seed-a2m-test.php）。
+ * 1. 動作確認用の子ブログ（a2m-test）を未変換の状態に作り直す（e2e/seed-a2m-test.php）。
  *    seed は a2m-test 以外のブログには触れない。
  * 2. 管理者でログインして、セッションを e2e/.auth/state.json に保存する。
  *
@@ -41,7 +41,7 @@ function reseed(): void {
     `ACMS_DB_PASS=${password}`,
     web,
     'php',
-    'docs/verification/seed-a2m-test.php',
+    'e2e/seed-a2m-test.php',
   ]);
 }
 

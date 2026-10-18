@@ -6,7 +6,7 @@
  *   docker exec -w /var/www/plugins/ArchivesToMedia \
  *     -e ACMS_DB_HOST=db -e ACMS_DB_NAME=db_my-blog-site -e ACMS_DB_USER=root \
  *     -e ACMS_DB_PASS="$(docker exec my-blog-site-backend-db-1 printenv MYSQL_ROOT_PASSWORD)" \
- *     my-blog-site-backend-web-1 php docs/verification/seed-a2m-test.php
+ *     my-blog-site-backend-web-1 php e2e/seed-a2m-test.php
  *
  * 安全のため、コードが a2m-test の子ブログ（親ブログではない）だけを対象にする。
  * 親ブログ（既存コンテンツ）には一切触れない。
@@ -23,7 +23,7 @@
 
 declare(strict_types=1);
 
-require __DIR__ . '/../../vendor/autoload.php';
+require __DIR__ . '/../vendor/autoload.php';
 
 \Acms\TestingFramework\Bootstrap::boot(getenv('ACMS_ROOT') ?: '/var/www/html');
 
