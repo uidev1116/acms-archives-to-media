@@ -66,5 +66,8 @@
     "src/assets/css/*.css": [
       "stylelint --fix"
     ]
+  },
+  "volta": {
+    "node": "22.19.0"
   }
 }

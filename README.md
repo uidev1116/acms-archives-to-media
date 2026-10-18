@@ -179,7 +179,7 @@ PHP のカバレッジは pcov または Xdebug で `vendor/bin/phpunit --covera
 
 ### フロントエンドの開発環境
 
-- Node.js 22.12 以上（`.nvmrc`）。`npm ci` で依存と Git フックが入ります（husky）。
+- Node.js 22.12 以上。Volta を使う場合は `package.json` の `volta`（22.19.0）で自動的に切り替わります。nvm / fnm などは `.nvmrc`（22）を読みます。`npm ci` で依存と Git フックが入ります（husky）。
 - **コミット時**（`pre-commit`）: 変更したファイルに lint-staged で ESLint（`--fix`）・Prettier・Stylelint を自動実行します。
 - **push 時**（`pre-push`）: 型チェックと vitest を実行します。
 - `npm run lint`（チェックのみ）／`npm run lint:fix`（自動修正）／`npm run check`（lint + 型チェック + テスト）。
