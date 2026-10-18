@@ -1,5 +1,5 @@
 import Alert from '@ablogcms/components/alert';
-import ButtonV2 from '@ablogcms/components/button-v2';
+import Button from '@ablogcms/components/button';
 import ProgressBar from '@ablogcms/components/progress-bar';
 import { useEffect, useRef, useState } from 'react';
 import { useApi } from '../../api/context';
@@ -96,18 +96,18 @@ export function RunStep({ jobId, total, onFinished, action = 'run', extraParams 
       {runner.error !== null && (
         <Alert variant="danger" role="alert">
           {runner.error.message}{' '}
-          <ButtonV2 size="small" onClick={() => void runner.start()}>
+          <Button size="small" onClick={() => void runner.start()}>
             再試行
-          </ButtonV2>
+          </Button>
         </Alert>
       )}
 
       <div className="acms-admin-a2m-actions">
-        {runner.running && <ButtonV2 onClick={runner.pause}>一時停止</ButtonV2>}
+        {runner.running && <Button onClick={runner.pause}>一時停止</Button>}
         {runner.paused && (
-          <ButtonV2 variant="filled" onClick={() => void runner.start()}>
+          <Button variant="primary" onClick={() => void runner.start()}>
             再開
-          </ButtonV2>
+          </Button>
         )}
       </div>
 

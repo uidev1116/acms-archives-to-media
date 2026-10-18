@@ -1,5 +1,5 @@
 import Alert from '@ablogcms/components/alert';
-import ButtonV2 from '@ablogcms/components/button-v2';
+import Button from '@ablogcms/components/button';
 import Spinner from '@ablogcms/components/spinner';
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError } from '../api/client';
@@ -133,14 +133,14 @@ export function JobPanel({ jobId, onChanged, allowDelete = false, onDeleted }: P
           )}
           <div className="acms-admin-a2m-actions">
             {RUNNABLE.has(status) && (
-              <ButtonV2
-                variant="filled"
+              <Button
+                variant="primary"
                 onClick={() => setMode({ type: 'run', total: detail.counts.pending ?? 0 })}
               >
                 実行を再開
-              </ButtonV2>
+              </Button>
             )}
-            {allowDelete && <ButtonV2 onClick={() => void remove()}>ジョブを削除</ButtonV2>}
+            {allowDelete && <Button onClick={() => void remove()}>ジョブを削除</Button>}
           </div>
         </>
       )}

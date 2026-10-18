@@ -1,5 +1,5 @@
 import Alert from '@ablogcms/components/alert';
-import ButtonV2 from '@ablogcms/components/button-v2';
+import Button from '@ablogcms/components/button';
 import { useState } from 'react';
 import { ApiError } from '../api/client';
 import { useApi } from '../api/context';
@@ -122,10 +122,10 @@ export function Wizard() {
           </h2>
           <JobPanel jobId={jobId} />
           <div className="acms-admin-a2m-actions">
-            <a className="acms-admin-btn-v2" href="#/jobs">
+            <a className="acms-admin-btn" href="#/jobs">
               過去の実行を見る
             </a>
-            <ButtonV2 onClick={restart}>新しい変換を始める</ButtonV2>
+            <Button onClick={restart}>新しい変換を始める</Button>
           </div>
         </section>
       )}

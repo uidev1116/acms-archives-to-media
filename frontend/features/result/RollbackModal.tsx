@@ -1,4 +1,4 @@
-import ButtonV2 from '@ablogcms/components/button-v2';
+import Button from '@ablogcms/components/button';
 import Checkbox from '@ablogcms/components/checkbox';
 import Modal, { ModalBody, ModalFooter, ModalHeader } from '@ablogcms/components/modal';
 import { useState } from 'react';
@@ -30,10 +30,10 @@ export function RollbackModal({ isOpen, count, onClose, onConfirm }: Props) {
         </p>
       </ModalBody>
       <ModalFooter>
-        <ButtonV2 onClick={onClose}>キャンセル</ButtonV2>
-        <ButtonV2 variant="filled" onClick={() => onConfirm(deleteMedia)}>
+        <Button onClick={onClose}>キャンセル</Button>
+        <Button variant="primary" onClick={() => onConfirm(deleteMedia)}>
           ロールバックする
-        </ButtonV2>
+        </Button>
       </ModalFooter>
     </Modal>
   );

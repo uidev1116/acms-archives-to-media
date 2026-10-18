@@ -1,6 +1,6 @@
 import Alert from '@ablogcms/components/alert';
 import Badge from '@ablogcms/components/badge';
-import ButtonV2 from '@ablogcms/components/button-v2';
+import Button from '@ablogcms/components/button';
 import Table, {
   TableBody,
   TableCell,
@@ -88,15 +88,15 @@ export function JobList() {
             </TableBody>
           </Table>
           <div className="acms-admin-a2m-pager">
-            <ButtonV2 size="small" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+            <Button size="small" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
               前のページ
-            </ButtonV2>
+            </Button>
             <span>
               {page} / {pages} ページ
             </span>
-            <ButtonV2 size="small" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
+            <Button size="small" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
               次のページ
-            </ButtonV2>
+            </Button>
           </div>
         </>
       )}

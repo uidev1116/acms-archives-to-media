@@ -1,5 +1,5 @@
 import Alert from '@ablogcms/components/alert';
-import ButtonV2 from '@ablogcms/components/button-v2';
+import Button from '@ablogcms/components/button';
 import Checkbox from '@ablogcms/components/checkbox';
 import Modal, { ModalBody, ModalFooter, ModalHeader } from '@ablogcms/components/modal';
 import ProgressBar from '@ablogcms/components/progress-bar';
@@ -56,9 +56,9 @@ export function ScanStep({ jobId, onBack, onProceed }: Props) {
       {runner.error !== null && (
         <Alert variant="danger" role="alert">
           {runner.error.message}{' '}
-          <ButtonV2 size="small" onClick={() => void runner.start()}>
+          <Button size="small" onClick={() => void runner.start()}>
             再試行
-          </ButtonV2>
+          </Button>
         </Alert>
       )}
 
@@ -86,10 +86,10 @@ export function ScanStep({ jobId, onBack, onProceed }: Props) {
             }}
           />
           <div className="acms-admin-a2m-actions">
-            <ButtonV2 onClick={onBack}>設定に戻る</ButtonV2>
-            <ButtonV2 variant="filled" disabled={pending === 0} onClick={() => setConfirming(true)}>
+            <Button onClick={onBack}>設定に戻る</Button>
+            <Button variant="primary" disabled={pending === 0} onClick={() => setConfirming(true)}>
               変換の実行へ
-            </ButtonV2>
+            </Button>
           </div>
         </>
       )}
@@ -114,9 +114,9 @@ export function ScanStep({ jobId, onBack, onProceed }: Props) {
           />
         </ModalBody>
         <ModalFooter>
-          <ButtonV2 onClick={() => setConfirming(false)}>キャンセル</ButtonV2>
-          <ButtonV2
-            variant="filled"
+          <Button onClick={() => setConfirming(false)}>キャンセル</Button>
+          <Button
+            variant="primary"
             disabled={!backedUp}
             onClick={() => {
               setConfirming(false);
@@ -124,7 +124,7 @@ export function ScanStep({ jobId, onBack, onProceed }: Props) {
             }}
           >
             変換を開始する
-          </ButtonV2>
+          </Button>
         </ModalFooter>
       </Modal>
     </section>

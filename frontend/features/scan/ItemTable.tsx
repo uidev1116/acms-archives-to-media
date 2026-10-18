@@ -1,6 +1,6 @@
 import Alert from '@ablogcms/components/alert';
 import Badge from '@ablogcms/components/badge';
-import ButtonV2 from '@ablogcms/components/button-v2';
+import Button from '@ablogcms/components/button';
 import Checkbox from '@ablogcms/components/checkbox';
 import Input from '@ablogcms/components/input';
 import Select from '@ablogcms/components/select';
@@ -146,32 +146,32 @@ export function ItemTable({
           value={draft.q}
           onChange={(e) => setDraft({ ...draft, q: e.target.value })}
         />
-        <ButtonV2 onClick={apply}>絞り込む</ButtonV2>
+        <Button onClick={apply}>絞り込む</Button>
       </div>
 
       {editable && (
         <div className="acms-admin-a2m-bulk">
-          <ButtonV2
+          <Button
             size="small"
             disabled={selected.length === 0}
             onClick={() => void exclude({ ids: selected, excluded: true })}
           >
             選択を除外
-          </ButtonV2>
-          <ButtonV2
+          </Button>
+          <Button
             size="small"
             disabled={selected.length === 0}
             onClick={() => void exclude({ ids: selected, excluded: false })}
           >
             選択の除外を解除
-          </ButtonV2>
-          <ButtonV2
+          </Button>
+          <Button
             size="small"
             disabled={Object.keys(activeFilter(applied)).length === 0}
             onClick={() => void exclude({ filter: activeFilter(applied), excluded: true })}
           >
             絞り込み結果をすべて除外
-          </ButtonV2>
+          </Button>
         </div>
       )}
 
@@ -246,15 +246,15 @@ export function ItemTable({
       )}
 
       <div className="acms-admin-a2m-pager">
-        <ButtonV2 size="small" disabled={pageNo <= 1} onClick={() => setPageNo((p) => p - 1)}>
+        <Button size="small" disabled={pageNo <= 1} onClick={() => setPageNo((p) => p - 1)}>
           前のページ
-        </ButtonV2>
+        </Button>
         <span>
           {pageNo} / {pages} ページ（{total} 件）
         </span>
-        <ButtonV2 size="small" disabled={pageNo >= pages} onClick={() => setPageNo((p) => p + 1)}>
+        <Button size="small" disabled={pageNo >= pages} onClick={() => setPageNo((p) => p + 1)}>
           次のページ
-        </ButtonV2>
+        </Button>
       </div>
     </div>
   );

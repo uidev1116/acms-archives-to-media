@@ -1,4 +1,4 @@
-import ButtonV2 from '@ablogcms/components/button-v2';
+import Button from '@ablogcms/components/button';
 import { useState } from 'react';
 import type { JobOptions } from '../../types';
 import { destName } from './destName';
@@ -62,13 +62,13 @@ export function TemplateHints({ fieldKeys, field }: Props) {
               <code>{fd}</code>
             </h4>
             <pre className="acms-admin-a2m-code">{`<!-- 旧 -->  ${s.old}\n<!-- 新 -->  ${s.next}\n<!-- 入力欄 -->\n${s.input}`}</pre>
-            <ButtonV2
+            <Button
               size="small"
               aria-label={`${fd} の新しい書き方をコピー`}
               onClick={() => void copy(fd, text)}
             >
               コピー
-            </ButtonV2>
+            </Button>
             {copied === fd && <span role="status"> コピーしました</span>}
           </div>
         );

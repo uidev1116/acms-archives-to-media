@@ -1,5 +1,5 @@
 import Alert from '@ablogcms/components/alert';
-import ButtonV2 from '@ablogcms/components/button-v2';
+import Button from '@ablogcms/components/button';
 import Checkbox from '@ablogcms/components/checkbox';
 import Fieldset from '@ablogcms/components/fieldset';
 import Input from '@ablogcms/components/input';
@@ -292,9 +292,9 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
       )}
 
       <div className="acms-admin-a2m-actions">
-        <ButtonV2 variant="filled" onClick={submit} disabled={busy}>
+        <Button variant="primary" onClick={submit} disabled={busy}>
           スキャンして確認へ
-        </ButtonV2>
+        </Button>
       </div>
 
       <Modal isOpen={confirmSame} onClose={() => setConfirmSame(false)} size="small">
@@ -307,16 +307,16 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
           </p>
         </ModalBody>
         <ModalFooter>
-          <ButtonV2 onClick={() => setConfirmSame(false)}>キャンセル</ButtonV2>
-          <ButtonV2
-            variant="filled"
+          <Button onClick={() => setConfirmSame(false)}>キャンセル</Button>
+          <Button
+            variant="primary"
             onClick={() => {
               setConfirmSame(false);
               onSubmit(toJobOptions(value));
             }}
           >
             理解して続ける
-          </ButtonV2>
+          </Button>
         </ModalFooter>
       </Modal>
     </section>

@@ -1,6 +1,6 @@
 import Alert from '@ablogcms/components/alert';
 import Badge from '@ablogcms/components/badge';
-import ButtonV2 from '@ablogcms/components/button-v2';
+import Button from '@ablogcms/components/button';
 import Table, { TableBody, TableCell, TableHead, TableRow } from '@ablogcms/components/table';
 import { useDefinitions } from '../../definitions';
 import {
@@ -71,13 +71,13 @@ export function JobOverview({ detail, onRollback, onCsv, onRequeue, onCleanup }:
       </Table>
 
       <div className="acms-admin-a2m-actions">
-        <ButtonV2 onClick={onCsv}>結果を CSV でダウンロード</ButtonV2>
-        {retryable && <ButtonV2 onClick={onRequeue}>スキップ・エラー分を再実行</ButtonV2>}
+        <Button onClick={onCsv}>結果を CSV でダウンロード</Button>
+        {retryable && <Button onClick={onRequeue}>スキップ・エラー分を再実行</Button>}
         {job.status === 'completed' && cleanup.cleanable > 0 && (
-          <ButtonV2 onClick={onCleanup}>旧データを削除（クリーンアップ）</ButtonV2>
+          <Button onClick={onCleanup}>旧データを削除（クリーンアップ）</Button>
         )}
         {ROLLBACKABLE.has(job.status) && (counts.converted ?? 0) > 0 && (
-          <ButtonV2 onClick={onRollback}>ロールバック</ButtonV2>
+          <Button onClick={onRollback}>ロールバック</Button>
         )}
       </div>
 
