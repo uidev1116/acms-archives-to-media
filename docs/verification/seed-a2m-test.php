@@ -16,6 +16,7 @@
  *   エントリー a2m-fields … 画像フィールド（グループ内を含む）、ファイルフィールド、ファイルが無いフィールド
  *   エントリー a2m-locked … 編集ロック中のエントリー（ENTRY_LOCKED のスキップ確認用）
  *   エントリー a2m-many   … 画像ユニット 30 件（一時停止・再開の確認用）
+ *   エントリー a2m-rev    … リビジョン（entry_rev / column_rev / field_rev）を持つエントリー（リビジョンを含める設定の確認用）
  *   archives/a2m-test/    … 上記が参照する実ファイル
  */
 
@@ -109,6 +110,8 @@ file_put_contents(
     "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
     . "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n"
 );
+image($dir . 'rev-a.jpg', 640, 480, 120, 80, 30, 'rev a');
+image($dir . 'rev-b.jpg', 640, 480, 30, 80, 120, 'rev b');
 for ($i = 1; $i <= 30; $i++) {
     image($dir . sprintf('many-%02d.jpg', $i), 320, 240, ($i * 37) % 200 + 30, ($i * 71) % 200 + 30, ($i * 113) % 200 + 30, 'many ' . $i);
 }
@@ -204,4 +207,28 @@ for ($i = 1; $i <= 30; $i++) {
     unit($blogId, $e4, $i, 'image', ['1' => "many {$i}", '2' => $p . sprintf('many-%02d.jpg', $i), '4' => "alt {$i}"]);
 }
 
-fwrite(STDERR, "seeded blog {$blogId}: entries {$e1}, {$e2}, {$e3}, {$e4}\n");
+// 5. リビジョン付き（本体と同じ内容を entry_rev / column_rev / field_rev に 2 世代ぶん持つ。2 世代目は別の画像）
+$e5 = entry($blogId, 'a2m-rev', 'リビジョンを持つエントリー');
+unit($blogId, $e5, 1, 'image', ['1' => 'リビジョン付き', '2' => $p . 'rev-b.jpg', '4' => 'rev alt']);
+fieldRows($blogId, $e5, 1, imageField('cover', $p . 'rev-b.jpg', '', 'カバー'));
+foreach ([1 => 'rev-a.jpg', 2 => 'rev-b.jpg'] as $revId => $file) {
+    $entryRow = q('SELECT * FROM ' . t('entry') . ' WHERE entry_id = ?', [$e5], 'row');
+    $entryRow += ['entry_approval_public_point' => 0, 'entry_approval_reject_point' => 0, 'entry_rev_id' => $revId, 'entry_rev_status' => 'none', 'entry_rev_user_id' => 1, 'entry_rev_datetime' => $now, 'entry_rev_memo' => 'seed rev ' . $revId];
+    $revColumns = array_map(static fn ($r) => (string) $r['column_name'], q('SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ?', [t('entry_rev')]));
+    $entryRow = array_intersect_key($entryRow, array_flip($revColumns));
+    q('INSERT INTO ' . t('entry_rev') . ' (' . implode(',', array_keys($entryRow)) . ') VALUES (' . implode(',', array_fill(0, count($entryRow), '?')) . ')', array_values($entryRow), 'exec');
+    foreach (q('SELECT * FROM ' . t('column') . ' WHERE column_entry_id = ?', [$e5]) as $row) {
+        $row['column_rev_id'] = $revId;
+        $row['column_field_2'] = $p . $file;
+        q('INSERT INTO ' . t('column_rev') . ' (' . implode(',', array_keys($row)) . ') VALUES (' . implode(',', array_fill(0, count($row), '?')) . ')', array_values($row), 'exec');
+    }
+    foreach (q('SELECT * FROM ' . t('field') . ' WHERE field_eid = ?', [$e5]) as $row) {
+        $row['field_rev_id'] = $revId;
+        if ($row['field_key'] === 'cover@path') {
+            $row['field_value'] = $p . $file;
+        }
+        q('INSERT INTO ' . t('field_rev') . ' (' . implode(',', array_keys($row)) . ') VALUES (' . implode(',', array_fill(0, count($row), '?')) . ')', array_values($row), 'exec');
+    }
+}
+
+fwrite(STDERR, "seeded blog {$blogId}: entries {$e1}, {$e2}, {$e3}, {$e4}, {$e5}\n");
