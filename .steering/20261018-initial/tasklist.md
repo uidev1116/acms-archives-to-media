@@ -19,12 +19,12 @@
 
 ## 2. 雛形
 
-- [ ] 公式スケルトンから生成し、名前空間を `Acms\Plugins\ArchivesToMedia` に置換
-- [ ] サンプル一式を削除し、ServiceProvider を最小構成に（$version 0.1.0 / $author uidev1116 / $menu archives_to_media_index）
-- [ ] テスト用 DB `db_acms_test` を作成し、`composer check` が通る骨格にする
-- [ ] package.json / vite.config.ts / tsconfig.json / ESLint / Prettier / Stylelint
-- [ ] CI（test.yml / release.yml）に `npm ci && npm run build` と npm lint ジョブを追加
-- [ ] README を書き換え
+- [x] 公式スケルトンから生成し、名前空間を `Acms\Plugins\ArchivesToMedia` に置換
+- [x] サンプル一式を削除し、ServiceProvider を最小構成に（$version 0.1.0 / $author uidev1116 / $menu archives_to_media_index）
+- [x] テスト用 DB `db_acms_test` を作成し、`composer check` が通る骨格にする
+- [x] package.json / vite.config.ts / tsconfig.json / ESLint / Prettier / Stylelint
+- [x] CI（test.yml / release.yml）に `npm ci && npm run build` と npm lint ジョブを追加
+- [x] README を書き換え
 
 ## 3. 実装
 
@@ -40,28 +40,28 @@
 
 ## 4. 自動チェック
 
-- [ ] `composer check`（phpcs / PHPStan level max / PHPUnit Unit + Integration）
-- [ ] `npm run build` / `npm run lint` / `npx tsc --noEmit`
-- [ ] push 後の GitHub Actions 結果確認
+- [x] `composer check`（phpcs / PHPStan level max / PHPUnit Unit + Integration）
+- [x] `npm run build` / `npm run lint` / `npx tsc --noEmit`
+- [x] push 後の GitHub Actions 結果確認
 
 ## 5. 動作確認（組み込みブラウザ）
 
-- [ ] 検証用の管理者ユーザー作成（認証情報は `.env.local`）
-- [ ] 子ブログ a2m-test とサンプルデータ・実ファイル
-- [ ] インストール → 設定 → スキャン → 確認 → 実行（一時停止・再開）→ 完了 → ロールバック
-- [ ] スクリーンショットを `docs/verification/` に保存
-- [ ] 別名モードで旧テンプレートが壊れないこと、`{fd}_media@path` がメディア URL を返すこと
-- [ ] ロールバック後に対象行が変換前と完全一致すること
+- [x] 検証用の管理者ユーザー作成（認証情報は `.env.local`）
+- [x] 子ブログ a2m-test とサンプルデータ・実ファイル
+- [x] インストール → 設定 → スキャン → 確認 → 実行（一時停止・再開）→ 完了 → ロールバック
+- [x] スクリーンショットを `docs/verification/` に保存
+- [x] 別名モードで旧テンプレートが壊れないこと、`{fd}_media@path` がメディア URL を返すこと
+- [x] ロールバック後に対象行が変換前と完全一致すること
 
 ## 6. レビューと修正（最大 3 周）
 
-- [ ] code-review（high）
-- [ ] 独立サブエージェントレビュー
-- [ ] 指摘の修正と再チェック
+- [x] code-review（high）→ 10 件中 8 件修正、2 件は理由付きで見送り（docs/report.md）
+- [ ] 独立サブエージェントレビュー（実行中。結果は docs/report.md §7）
+- [ ] サブエージェントの指摘の修正と再チェック
 
 ## 7. 後片付け
 
-- [ ] a2m-test を未変換状態に戻す
-- [ ] 親ブログのデータが変わっていないことを確認
-- [ ] `docs/report.md` を作成して push
-- [ ] `git status` クリーン / origin/main と一致
+- [x] a2m-test を未変換状態に戻す
+- [x] 親ブログのデータが変わっていないことを確認
+- [x] `docs/report.md` を作成して push（サブエージェントレビュー結果は追記予定）
+- [x] `git status` クリーン / origin/main と一致
