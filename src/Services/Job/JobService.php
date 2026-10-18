@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Services\Job;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\StateException;
 use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\ItemStatus;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Job;
@@ -14,6 +15,7 @@ use Acms\Plugins\ArchivesToMedia\Services\Repository\ItemRepository;
 use Acms\Plugins\ArchivesToMedia\Services\Repository\JobRepository;
 use Acms\Plugins\ArchivesToMedia\Services\Support\AuditLog;
 use Acms\Plugins\ArchivesToMedia\Services\Support\BlogScope;
+use Acms\Plugins\ArchivesToMedia\Services\Support\InvalidInputException;
 
 /**
  * 画面（AdminApi）から使う操作のまとめ役。
@@ -32,6 +34,8 @@ class JobService
         private readonly BlogScope $scope,
         /** @var \Closure(int): bool 指定ブログの管理権限があるか（sessionWithAdministration($bid)） */
         private readonly \Closure $canAdminister,
+        /** @var (\Closure(): list<string>)|null サイトで使えるメディアユニットの種類（config の column_add_type）。null なら確かめない */
+        private readonly ?\Closure $mediaUnitTypes = null,
     ) {
     }
 
@@ -41,7 +45,8 @@ class JobService
      */
     public function create(int $blogId, int $userId, array $options): Job
     {
-        $parsed = JobOptions::fromArray($options);
+        $parsed = JobOptions::fromArray($options, true);
+        $this->assertMediaUnitTypes($parsed);
         $this->assertCanAdminister($blogId, $parsed);
         $id = $this->jobs->create($blogId, $userId, $parsed);
         $this->log->info('ジョブを作成しました', ['jobId' => $id, 'blogId' => $blogId, 'userId' => $userId, 'options' => $parsed->toArray()]);
@@ -49,7 +54,7 @@ class JobService
     }
 
     /**
-     * @return array{job: array<string, mixed>, summary: list<array<string, mixed>>, counts: array<string, int>, cleanup: array{cleanable: int, cleaned: int}}
+     * @return array{job: array<string, mixed>, summary: list<array<string, mixed>>, counts: array<string, int>, finalizing: bool, cleanup: array{cleanable: int, cleaned: int}}
      */
     public function get(int $jobId, int $blogId): array
     {
@@ -59,7 +64,9 @@ class JobService
             'summary' => $this->items->summary($jobId),
             'counts' => $this->items->countByStatus($jobId),
             // 同名モードは変換時に旧キーを置き換え済みなので、クリーンアップの対象は無い
-            'cleanup' => $job->options->fieldMode === 'same' ? ['cleanable' => 0, 'cleaned' => 0] : $this->items->cleanupCounts($jobId),
+            // 確定済みで、スナップショットの回収が途中のとき（続きを実行できる）
+            'finalizing' => $job->status === JobStatus::Finalized && str_starts_with((string) $job->scanCursor, 'finalize:'),
+            'cleanup' => $job->options->fieldMode === 'same' || $job->status === JobStatus::Finalized ? ['cleanable' => 0, 'cleaned' => 0] : $this->items->cleanupCounts($jobId),
         ];
     }
 
@@ -95,7 +102,8 @@ class JobService
     public function updateOptions(int $jobId, int $blogId, array $options): Job
     {
         $job = $this->jobFor($jobId, $blogId);
-        $parsed = JobOptions::fromArray($options);
+        $parsed = JobOptions::fromArray($options, true);
+        $this->assertMediaUnitTypes($parsed);
         $this->assertCanAdminister($blogId, $parsed);
         $this->scanner->reset($job);
         $this->jobs->setOptions($jobId, $parsed);
@@ -108,7 +116,9 @@ class JobService
      */
     public function exclude(int $jobId, int $blogId, ?array $ids, ?array $filter, bool $excluded): int
     {
-        $this->jobFor($jobId, $blogId);
+        // アイテムの状態を変える操作なので、書き換え系と同じく、子ブログを含むジョブは全子孫ブログの権限を確かめる
+        // （権限の無い子ブログの行に効いたり、絞り込みの件数から元ファイルのパスの有無を探られたりしないように）
+        $this->jobToOperate($jobId, $blogId);
         if ($filter !== null) {
             return $this->items->setExcludedByFilter($jobId, $filter, $excluded);
         }
@@ -138,9 +148,14 @@ class JobService
         return $this->jobFor($jobId, $blogId);
     }
 
-    public function requeue(int $jobId, int $blogId): int
+    /**
+     * 時間の予算の範囲でスキップ・エラー分を戻す。done が false の間は、続けて呼ぶ。
+     *
+     * @return array{requeued: int, done: bool}
+     */
+    public function requeueChunk(int $jobId, int $blogId, bool $restart = false): array
     {
-        return $this->runner->requeue($this->jobToOperate($jobId, $blogId));
+        return $this->runner->requeueChunk($this->jobToOperate($jobId, $blogId), 15.0, $restart);
     }
 
     public function rollback(int $jobId, int $blogId, bool $deleteCreatedMedia): ChunkResult
@@ -150,7 +165,7 @@ class JobService
             $this->log->info('ロールバックを開始しました', ['jobId' => $jobId, 'deleteCreatedMedia' => $deleteCreatedMedia]);
         }
         $result = $this->rollbacker->rollbackChunk($job, $deleteCreatedMedia);
-        if ($result->done) {
+        if ($result->status === JobStatus::RolledBack) {
             $this->log->info('ロールバックが完了しました', ['jobId' => $jobId, 'restored' => $result->converted, 'conflicts' => $result->error]);
         }
         return $result;
@@ -167,15 +182,69 @@ class JobService
     }
 
     /**
+     * 変換を確定する。ロールバック用のスナップショットを捨てて DB の容量を回収する（元には戻せなくなる）。
+     * 結果の件数と CSV は残る。確定したジョブは削除できる。
+     *
+     * 件数が多いと 1 回では終わらないので、時間の予算で区切る。done が false の間は、続けて呼ぶ
+     * （確定済み = Finalized のジョブでも、残りの回収を続けられる）。
+     *
+     * 別名モードで旧データのクリーンアップが済んでいないジョブは、確定するとクリーンアップできなくなるので、
+     * $keepLegacyKeys（旧データを残したまま確定する）の確認が無ければ拒否する。
+     *
+     * @return array{done: bool}
+     * @throws StateException 完了済み（Completed）でも確定済み（Finalized）でもないジョブ、旧データの確認が無い
+     */
+    public function finalize(int $jobId, int $blogId, bool $keepLegacyKeys = false, int $limit = 2000, float $timeBudget = 15.0): array
+    {
+        $job = $this->jobToOperate($jobId, $blogId);
+        if ($job->status === JobStatus::Completed) {
+            $cleanable = $this->items->cleanupCounts($jobId)['cleanable'];
+            if ($job->options->fieldMode !== 'same' && $cleanable > 0 && !$keepLegacyKeys) {
+                throw new StateException('旧データのクリーンアップが済んでいないフィールドが ' . $cleanable . ' 件あります。確定すると、あとからクリーンアップできなくなります。先にクリーンアップするか、旧データを残したまま確定することを確認してください。');
+            }
+            // 回収が済むまでの目印（画面の「記録の回収を続ける」を出す条件）。済んだら消す。
+            // 遷移の前に置く（遷移の直後に落ちても、続きを実行できるように）
+            $this->jobs->setCursor($jobId, 'finalize:0');
+            if (!$this->jobs->transition($job->id, [JobStatus::Completed], JobStatus::Finalized)) {
+                $this->jobs->setCursor($jobId, null);
+                throw new StateException('ジョブの状態が変わったため、確定できませんでした。画面を読み込み直してください。');
+            }
+            $this->log->info('変換を確定しました（ロールバックできなくなりました）', ['jobId' => $jobId]);
+        } elseif ($job->status !== JobStatus::Finalized) {
+            throw new StateException('確定できるのは、変換が完了したジョブだけです: ' . $job->status->value);
+        }
+        // 位置はジョブのカーソルに持つ（確定済みのジョブに呼び直したとき、続きから回収する）
+        $cursor = (string) $this->jobs->find($jobId)?->scanCursor;
+        $afterId = str_starts_with($cursor, 'finalize:') ? (int) substr($cursor, 9) : 0;
+        $started = microtime(true);
+        do {
+            $step = $this->items->purgeSnapshots($jobId, $afterId, $limit);
+            if ($step['count'] === 0) {
+                $this->jobs->setCursor($jobId, null);
+                return ['done' => true];
+            }
+            $afterId = $step['last'];
+            $this->jobs->setCursor($jobId, 'finalize:' . $afterId);
+        } while ((microtime(true) - $started) < $timeBudget);
+        return ['done' => false];
+    }
+
+    /**
      * 変換済みのアイテムが残っているジョブや、処理中のジョブは削除できない。
      */
     public function delete(int $jobId, int $blogId): void
     {
         $job = $this->jobFor($jobId, $blogId);
         $active = [JobStatus::Scanning, JobStatus::Running, JobStatus::RollingBack];
-        $hasConverted = ($this->items->countByStatus($jobId)[ItemStatus::Converted->value] ?? 0) > 0;
+        // 確定済みのジョブは、ロールバックできないので変換済みが残っていても削除できる
+        $hasConverted = $job->status !== JobStatus::Finalized
+            && ($this->items->countByStatus($jobId)[ItemStatus::Converted->value] ?? 0) > 0;
         if (in_array($job->status, $active, true) || $hasConverted) {
-            throw new \LogicException('処理中、または変換済みのアイテムが残っているジョブは削除できません。先にロールバックしてください。');
+            throw new StateException('処理中、または変換済みのアイテムが残っているジョブは削除できません。先にロールバックしてください。');
+        }
+        // アイテムが多いと 1 回では消し切れない。途中で止まってもジョブは残るので、もう一度削除すれば続きから消える
+        if (!$this->items->deleteByJob($jobId)) {
+            throw new StateException('アイテムの削除に時間がかかっています。もう一度「ジョブを削除」を実行してください。');
         }
         $this->jobs->delete($jobId);
         $this->log->info('ジョブを削除しました', ['jobId' => $jobId]);
@@ -187,8 +256,8 @@ class JobService
      */
     public function items(int $jobId, int $blogId, array $filters, string $sort, bool $desc, int $page, int $perPage): array
     {
-        $this->jobFor($jobId, $blogId);
-        $res = $this->items->search($jobId, $filters, $sort, $desc, $page, $perPage);
+        $job = $this->jobFor($jobId, $blogId);
+        $res = $this->items->search($jobId, $filters, $sort, $desc, $page, $perPage, $job->total, $this->visibleBlogIds($job, $blogId));
         return ['items' => array_map($this->presentRow(...), $res['items']), 'total' => $res['total']];
     }
 
@@ -211,21 +280,56 @@ class JobService
      */
     public function writeCsv(int $jobId, int $blogId, $stream): void
     {
-        $this->jobFor($jobId, $blogId);
+        $visible = $this->visibleBlogIds($this->jobFor($jobId, $blogId), $blogId);
         fwrite($stream, "\xEF\xBB\xBF");
         fputcsv($stream, ['item_id', 'target', 'owner_type', 'owner_id', 'status', 'reason', 'source_path', 'media_ids', 'message'], ',', '"', '\\');
-        $page = 1;
+        $afterId = 0;
         do {
-            $res = $this->items->search($jobId, [], 'item_id', false, $page, 200);
-            foreach ($res['items'] as $row) {
+            $rows = $this->items->exportRows($jobId, $afterId, 200, $visible);
+            foreach ($rows as $row) {
+                $afterId = Cast::int($row['item_id']);
                 $r = $this->presentRow($row);
                 fputcsv($stream, array_map($this->csvCell(...), [
                     $r['id'], $r['target'], $r['ownerType'], $r['ownerId'], $r['status'], $r['reason'],
                     implode(' | ', $r['sourcePaths']), implode(',', $r['mediaIds']), Cast::str($r['message']),
                 ]), ',', '"', '\\');
             }
-            $page++;
-        } while (count($res['items']) === 200);
+        } while (count($rows) === 200);
+    }
+
+    /**
+     * 変換先のメディアユニットが、サイトのエディター設定にある種類か。無い種類に書き換えると、
+     * 変換後のユニットが編集画面で表示できなくなる。
+     *
+     * @throws InvalidInputException
+     */
+    private function assertMediaUnitTypes(JobOptions $options): void
+    {
+        if ($this->mediaUnitTypes === null) {
+            return;
+        }
+        $allowed = [...($this->mediaUnitTypes)(), 'media'];
+        foreach ($options->unitTypeMap as $to) {
+            if (!in_array($to, $allowed, true)) {
+                throw new InvalidInputException('変換先のユニット種類「' . $to . '」は、このサイトのエディター設定にありません。');
+            }
+        }
+    }
+
+    /**
+     * 読み取りで見せてよいブログ。子ブログを含むジョブで、操作する人が管理権限を持たない子ブログがあれば、
+     * そのブログの行（元ファイルのパス・所属 ID など）は見せない。全ブログを見せてよければ null。
+     *
+     * @return list<int>|null
+     */
+    private function visibleBlogIds(Job $job, int $blogId): ?array
+    {
+        if (!$job->options->includeChildBlogs) {
+            return null;
+        }
+        $all = $this->scope->blogIds($blogId, true);
+        $allowed = array_values(array_filter($all, fn (int $id): bool => ($this->canAdminister)($id)));
+        return count($allowed) === count($all) ? null : $allowed;
     }
 
     /**

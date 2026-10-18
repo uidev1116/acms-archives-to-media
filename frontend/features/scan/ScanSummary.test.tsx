@@ -45,4 +45,27 @@ describe('ScanSummary', () => {
     render(<ScanSummary summary={[]} />);
     expect(screen.getByText('変換できる候補は見つかりませんでした。')).toBeInTheDocument();
   });
+
+  it('新規か再利用かを判定していない候補があれば、実行時に判定することを知らせる', () => {
+    render(
+      <ScanSummary
+        summary={[
+          { target: 'field_image', status: 'pending', preview: 'new', reason: '', count: 2 },
+          { target: 'field_image', status: 'pending', preview: 'unknown', reason: '', count: 7 },
+        ]}
+      />,
+    );
+    expect(screen.getByText(/7 件は.*実行時に判定します/)).toBeInTheDocument();
+    const row = screen.getByRole('row', { name: /画像フィールド/ });
+    expect(
+      within(row)
+        .getAllByRole('cell')
+        .map((c) => c.textContent),
+    ).toEqual(['9', '2', '0', '0', '7', '0', '0']); // 合計, 新規, 再利用, 混在, 未判定, スキップ, 除外
+  });
+
+  it('判定していない候補が無ければ知らせない', () => {
+    render(<ScanSummary summary={summary} />);
+    expect(screen.queryByText(/実行時に判定します/)).not.toBeInTheDocument();
+  });
 });

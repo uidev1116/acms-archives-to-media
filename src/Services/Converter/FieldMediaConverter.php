@@ -165,7 +165,9 @@ class FieldMediaConverter implements ConverterInterface
             }
         }
         $groupAdded = $after['groupAdded'] ?? [];
-        if (is_array($groupAdded)) {
+        // 同じフィールドの別の繰り返し（sort）が変換されたまま残っているあいだは、グループ定義の追記を消さない
+        // （そちらの {dest} がグループのループに出なくなる）
+        if (is_array($groupAdded) && !($dest !== $fd && $this->store->existsInOtherSort($loc, $dest . '@media'))) {
             foreach ($groupAdded as $row) {
                 if (is_array($row)) {
                     /** @var array<string, mixed> $row */

@@ -8,6 +8,8 @@ use Acms\Plugins\ArchivesToMedia\Services\Job\ForbiddenException;
 use Acms\Plugins\ArchivesToMedia\Services\Job\JobBusyException;
 use Acms\Plugins\ArchivesToMedia\Services\Job\JobNotFoundException;
 use Acms\Plugins\ArchivesToMedia\Services\Support\AuditLog;
+use Acms\Plugins\ArchivesToMedia\Services\Support\InvalidInputException;
+use Acms\Plugins\ArchivesToMedia\Services\Support\StateException;
 
 /**
  * POST ハンドラの中身。権限の結果（呼び出し側が sessionWithAdministration() で判定したもの）と入力を受け取り、
@@ -17,11 +19,35 @@ class ApiEndpoint
 {
     public const ACTIONS = [
         'definitions', 'jobs', 'job', 'create', 'update', 'scan', 'exclude',
-        'items', 'run', 'pause', 'requeue', 'rollback', 'cleanup', 'delete',
+        'items', 'run', 'pause', 'requeue', 'rollback', 'cleanup', 'finalize', 'delete',
+    ];
+
+    /** リクエストから入力として読むキー（ここに無いキーは読まない） */
+    public const INPUT_KEYS = [
+        'jobId', 'options', 'ids', 'filter', 'excluded', 'page', 'perPage',
+        'target', 'status', 'reason', 'owner', 'preview', 'q', 'sort', 'desc', 'deleteCreatedMedia', 'keepLegacyKeys', 'restart',
     ];
 
     public function __construct(private readonly AdminApi $api, private readonly AuditLog $log)
     {
+    }
+
+    /**
+     * リクエストの値（$read でキーから読む。無ければ null）から入力を集めて実行する。
+     *
+     * @param \Closure(string): ?string $read
+     * @return array{status: int, body: array<string, mixed>}
+     */
+    public function executeRequest(\Closure $read, bool $isAdministrator, int $blogId, int $userId): array
+    {
+        $input = [];
+        foreach (self::INPUT_KEYS as $key) {
+            $value = $read($key);
+            if ($value !== null) {
+                $input[$key] = $value;
+            }
+        }
+        return $this->execute($read('action') ?? '', $input, $isAdministrator, $blogId, $userId);
     }
 
     /**
@@ -38,7 +64,7 @@ class ApiEndpoint
         }
         try {
             return ['status' => 200, 'body' => $this->api->handle($action, $input, $blogId, $userId)];
-        } catch (\InvalidArgumentException $e) {
+        } catch (InvalidInputException $e) {
             return $this->error(422, 'invalid', $e->getMessage());
         } catch (ForbiddenException $e) {
             return $this->error(403, 'forbidden', $e->getMessage());
@@ -46,7 +72,7 @@ class ApiEndpoint
             return $this->error(404, 'not_found', $e->getMessage());
         } catch (JobBusyException $e) {
             return $this->error(409, 'busy', $e->getMessage());
-        } catch (\LogicException $e) {
+        } catch (StateException $e) {
             return $this->error(409, 'state', $e->getMessage());
         } catch (\Throwable $e) {
             $this->log->notice('操作に失敗しました', ['action' => $action, 'error' => $e->getMessage()]);

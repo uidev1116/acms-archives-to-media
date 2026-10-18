@@ -9,7 +9,7 @@ use Acms\Plugins\ArchivesToMedia\Services\Domain\ReasonCode;
 /**
  * 元ファイルを取り込めないことを、理由コード付きで表す例外
  */
-final class SourceException extends \RuntimeException
+final class SourceException extends \RuntimeException implements \Acms\Plugins\ArchivesToMedia\Services\Support\PublicMessage
 {
     public function __construct(public readonly ReasonCode $reason, string $message = '', ?\Throwable $previous = null)
     {

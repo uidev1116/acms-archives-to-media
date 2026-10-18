@@ -6,9 +6,8 @@ name: Release
 # The plugin version lives in src/ServiceProvider.php ($version). Keep the tag and that value in
 # sync — the "Verify" step below fails the run if they disagree, so no mismatched zip is published.
 #
-# This workflow ships in every generated plugin. On the archives_to_media repo itself, tagging (for Packagist)
-# must NOT publish a meaningless "ArchivesToMedia" zip, so the job is skipped there — detected via
-# scripts/namespace.php, which only exists until `composer create-project` runs it (it self-deletes).
+# scripts/namespace.php (the skeleton's one-time renamer, which deletes itself) must be gone before a release is
+# published; the guard step below skips the run while it still exists.
 on:
   push:
     tags:
@@ -21,21 +20,21 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
-      - name: Skip release on the unrenamed archives_to_media
+      - name: Skip release while the skeleton renamer still exists
         id: guard
         run: |
           if [ -f scripts/namespace.php ]; then
-            echo "scripts/namespace.php present — this is the archives_to_media, not a generated plugin. Skipping."
+            echo "scripts/namespace.php present — the skeleton has not been renamed yet. Skipping."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Set up PHP
         if: steps.guard.outputs.skip != 'true'
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
           php-version: '8.5'
           extensions: zip
@@ -47,7 +46,7 @@ jobs:
 
       - name: Set up Node
         if: steps.guard.outputs.skip != 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: npm

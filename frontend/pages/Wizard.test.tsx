@@ -113,7 +113,10 @@ describe('Wizard', () => {
     mount(client);
     await goToScan();
     expect(await screen.findByRole('alert')).toHaveTextContent('管理者権限が必要です。');
-    expect(screen.getByRole('button', { name: 'スキャンして確認へ' })).toBeEnabled();
+    // 確認ダイアログが閉じ終わる（背景の aria-hidden が外れる）のを待つ
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'スキャンして確認へ' })).toBeEnabled(),
+    );
   });
 
   it('スキャン画面から設定に戻って再送信すると、ジョブを更新して再スキャンする', async () => {

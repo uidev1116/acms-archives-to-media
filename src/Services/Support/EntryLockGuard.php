@@ -24,7 +24,7 @@ class EntryLockGuard
      */
     public function isLocked(LocatorInterface $locator): bool
     {
-        $entryId = $this->entryOf($locator);
+        $entryId = $this->entryIdOf($locator);
         if ($entryId === null) {
             return false;
         }
@@ -43,7 +43,10 @@ class EntryLockGuard
         return false;
     }
 
-    private function entryOf(LocatorInterface $locator): ?int
+    /**
+     * 対象が属するエントリーの ID（エントリーに属さない対象は null）
+     */
+    public function entryIdOf(LocatorInterface $locator): ?int
     {
         if ($locator instanceof ColumnLocator) {
             $id = $this->db->one(

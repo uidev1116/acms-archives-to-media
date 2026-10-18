@@ -7,7 +7,8 @@ export type JobStatus =
   | 'completed'
   | 'failed'
   | 'rolling_back'
-  | 'rolled_back';
+  | 'rolled_back'
+  | 'finalized';
 
 export type TargetType = 'unit_image' | 'unit_file' | 'field_image' | 'field_file';
 export type FieldMode = 'suffix' | 'same' | 'custom';
@@ -65,6 +66,8 @@ export interface CleanupCounts {
 }
 
 export interface JobDetail {
+  /** 確定済みで、スナップショットの回収が途中（続きを実行できる） */
+  finalizing?: boolean;
   job: Job;
   summary: SummaryRow[];
   counts: Record<string, number>;

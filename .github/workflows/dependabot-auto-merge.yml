@@ -3,6 +3,10 @@ name: Dependabot auto-merge
 # Auto-merge Dependabot PRs for patch and minor updates once the required checks pass.
 # Major updates are left for manual review.
 #
+# Only GitHub Actions are tracked (see .github/dependabot.yml), and every action is pinned to a commit SHA.
+# npm / composer dependencies are NOT auto-merged: the admin UI bundles React and @ablogcms/components and runs
+# with administrator privileges, so those updates are reviewed by hand (CI runs `npm audit` on every push).
+#
 # Requires (in repo Settings): "Allow auto-merge" enabled, and a branch protection rule on the
 # default branch with the Test workflow as a required status check — otherwise --auto has no check
 # to wait for and would merge without CI.
@@ -19,7 +23,7 @@ jobs:
     steps:
       - name: Fetch Dependabot metadata
         id: metadata
-        uses: dependabot/fetch-metadata@v3
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 

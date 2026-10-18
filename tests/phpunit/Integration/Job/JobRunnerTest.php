@@ -10,6 +10,7 @@ use Acms\Plugins\ArchivesToMedia\Services\Domain\Candidate;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\ItemStatus;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\JobOptions;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\JobStatus;
+use Acms\Plugins\ArchivesToMedia\Services\Domain\ReasonCode;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Locator\LocatorInterface;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\TargetType;
 use Acms\Plugins\ArchivesToMedia\Services\Job\JobBusyException;
@@ -66,6 +67,62 @@ final class JobRunnerTest extends A2mTestCase
         $item = $this->items()->byStatuses($jobId, [ItemStatus::Converted], 0, 1)[0];
         $this->assertNotNull($item->after);
         $this->assertNotSame([], $item->mediaIds);
+    }
+
+    #[Test]
+    public function 書き込みはエントリー単位のロックの中で行う(): void
+    {
+        $this->seedBasic();
+        $jobId = $this->scannedJob();
+        $locked = [];
+        $entries = new \Acms\Plugins\ArchivesToMedia\Services\Support\EntrySerializer(function (int $eid, callable $fn) use (&$locked) {
+            $locked[] = $eid;
+            return $fn();
+        });
+
+        $res = $this->runner(null, null, $entries)->runChunk($this->job($jobId));
+
+        $this->assertSame(3, $res->converted);
+        $this->assertSame([$this->entryId, $this->entryId, $this->entryId], $locked, 'ユニット 2 件とエントリーのフィールド 1 件');
+    }
+
+    #[Test]
+    public function エントリーのロックを取れなければENTRY_LOCKEDでスキップし_何も書き換えない(): void
+    {
+        $this->archives->put('001/a.jpg', 'A');
+        $this->insertColumn('u1', 'image', ['column_field_2' => '001/a.jpg']);
+        $jobId = $this->scannedJob();
+        $before = $this->columnRow('u1');
+        $entries = new \Acms\Plugins\ArchivesToMedia\Services\Support\EntrySerializer(static function (int $eid): never {
+            throw new \Acms\Services\Unit\Exceptions\UnitLockTimeoutException($eid);
+        });
+
+        $res = $this->runner(null, null, $entries)->runChunk($this->job($jobId));
+
+        $this->assertSame([0, 1, 0], [$res->converted, $res->skipped, $res->error]);
+        $this->assertSame('ENTRY_LOCKED', $res->log[0]['reason']);
+        $this->assertSame($before, $this->columnRow('u1'));
+        $item = $this->items()->byStatuses($jobId, [ItemStatus::Skipped], 0, 1)[0];
+        $this->assertSame(ItemStatus::Skipped, $item->status);
+    }
+
+    #[Test]
+    public function 読み込んだあとに別の操作で状態が変わっていたら_実行を始めずに拒否する(): void
+    {
+        $this->seedBasic();
+        $jobId = $this->scannedJob();
+        $stale = $this->job($jobId);
+        $this->assertSame(JobStatus::Scanned, $stale->status);
+        // 別のタブで、先にロールバック済みにされた（状態は DB が正）
+        $this->db->exec('UPDATE ' . $this->db->t('a2m_job') . ' SET job_status = ? WHERE job_id = ?', ['rolled_back', $jobId]);
+
+        try {
+            $this->runner()->runChunk($stale);
+            $this->fail('拒否されるはず');
+        } catch (\Acms\Plugins\ArchivesToMedia\Services\Support\StateException) {
+            $this->assertSame(JobStatus::RolledBack, $this->job($jobId)->status, '状態を上書きしない');
+            $this->assertSame('image', $this->columnRow('u1')['column_type'], '何も書き換えない');
+        }
     }
 
     #[Test]
@@ -176,7 +233,7 @@ final class JobRunnerTest extends A2mTestCase
         // ロック解除後、スキップ分を再実行
         $this->db->exec('UPDATE ' . $this->db->t('entry') . ' SET entry_lock_uid = 0, entry_lock_datetime = \'1000-01-01 00:00:00\' WHERE entry_id = ?', [$this->entryId]);
         $runner = $this->runner();
-        $this->assertSame(1, $runner->requeue($this->job($jobId)));
+        $this->assertSame(1, $runner->requeueChunk($this->job($jobId), 600.0, true)['requeued']);
         $this->assertSame(JobStatus::Paused, $this->job($jobId)->status);
         $res = $runner->runChunk($this->job($jobId));
         $this->assertSame(1, $res->converted);
@@ -268,6 +325,23 @@ final class JobRunnerTest extends A2mTestCase
     }
 
     #[Test]
+    public function 別のブログのメディアを再利用したらMEDIA_OTHER_BLOGの警告を付ける(): void
+    {
+        $other = $this->createTestBlog();
+        $this->archives->put('003/h.jpg', 'H');
+        $foreign = \Acms\TestingFramework\Seeder\MediaSeeder::seed($other, 1, ['media_hash' => hash('sha256', 'H')]);
+        $this->insertImageField('hero', '003/h.jpg', 1, '');
+        $jobId = $this->scannedJob(['targets' => ['field_image']]);
+
+        $this->runner()->runChunk($this->job($jobId));
+
+        $items = $this->items()->byStatuses($jobId, [ItemStatus::Converted], 0, 10);
+        $this->assertCount(1, $items);
+        $this->assertSame([$foreign], $items[0]->mediaIds);
+        $this->assertSame('MEDIA_OTHER_BLOG', $items[0]->reason);
+    }
+
+    #[Test]
     public function メディア登録の失敗はスキップ扱いでジョブは止まらない(): void
     {
         $this->seedBasic();
@@ -337,7 +411,8 @@ final class JobRunnerTest extends A2mTestCase
         $this->assertSame('media', $this->columnRow('u2')['column_type']);
         $err = $this->items()->byStatuses($jobId, [ItemStatus::Error], 0, 1)[0];
         $this->assertSame('UNKNOWN_ERROR', $err->reason);
-        $this->assertStringContainsString('boom', (string) $err->message);
+        $this->assertStringNotContainsString('boom', (string) $err->message, '例外の生の文言は記録しない');
+        $this->assertSame(\Acms\Plugins\ArchivesToMedia\Services\Support\ErrorMessage::GENERIC, $err->message);
         // 登録済みのメディアは対応表に残る（次回再利用）
         $this->assertNotNull((new PathMapRepository($this->db))->find($this->blogId, '001/a.jpg'));
         $this->assertSame(JobStatus::Completed, $this->job($jobId)->status);
@@ -354,10 +429,135 @@ final class JobRunnerTest extends A2mTestCase
         $this->assertSame(1, $this->job($jobId)->skipped);
 
         $this->media->failRegister = false;
-        $this->assertSame(1, $runner->requeue($this->job($jobId)));
+        $this->assertSame(1, $runner->requeueChunk($this->job($jobId), 600.0, true)['requeued']);
         $res = $runner->runChunk($this->job($jobId));
         $this->assertSame(1, $res->converted);
         $this->assertSame(0, $this->job($jobId)->skipped);
+    }
+
+    #[Test]
+    public function 再実行は時間の予算で区切って返し_続きから全件戻せる(): void
+    {
+        for ($i = 1; $i <= 5; $i++) {
+            $this->insertColumn('q' . $i, 'image', ['column_field_2' => "001/q{$i}.jpg"]);
+            $this->archives->put("001/q{$i}.jpg", 'Q' . $i);
+        }
+        $jobId = $this->scannedJob(['targets' => ['unit_image']]);
+        $this->media->failRegister = true;
+        $runner = $this->runner();
+        $runner->runChunk($this->job($jobId));
+        $this->assertSame(5, $this->job($jobId)->skipped);
+
+        $this->media->failRegister = false;
+        $first = $runner->requeueChunk($this->job($jobId), 0.0);
+        $this->assertFalse($first['done']);
+        $this->assertGreaterThanOrEqual(1, $first['requeued']);
+        $this->assertLessThan(5, $first['requeued'], '予算が尽きたら、全件を待たずに返す');
+        $this->assertSame(JobStatus::Paused, $this->job($jobId)->status, '途中で止まっても、実行できる状態にしておく');
+
+        $total = $first['requeued'];
+        $res = $first;
+        for ($i = 0; $i < 10 && !$res['done']; $i++) {
+            $res = $runner->requeueChunk($this->job($jobId), 0.0);
+            $total += $res['requeued'];
+        }
+        $this->assertTrue($res['done']);
+        $this->assertSame(5, $total);
+        $this->assertSame(5, $this->runner()->runChunk($this->job($jobId))->converted);
+    }
+
+    #[Test]
+    public function 再実行を最初からやり直す指定では_前回途中のカーソルを捨てて取りこぼさない(): void
+    {
+        for ($i = 1; $i <= 3; $i++) {
+            $this->insertColumn('r' . $i, 'image', ['column_field_2' => "001/r{$i}.jpg"]);
+            $this->archives->put("001/r{$i}.jpg", 'R' . $i);
+        }
+        $jobId = $this->scannedJob(['targets' => ['unit_image']]);
+        $this->media->failRegister = true;
+        $runner = $this->runner();
+        $runner->runChunk($this->job($jobId));
+        $this->media->failRegister = false;
+        $first = $runner->requeueChunk($this->job($jobId), 0.0);
+        $this->assertFalse($first['done']);
+        // 途中で止まったあと、先頭側のアイテムがまた失敗した（カーソルより前）
+        $items = $this->items()->byStatuses($jobId, [ItemStatus::Pending], 0, 10);
+        $this->assertNotEmpty($items);
+        $this->items()->markStatus($items[0]->id, ItemStatus::Skipped, ReasonCode::EntryLocked);
+
+        $res = $runner->requeueChunk($this->job($jobId), 600.0, true);
+
+        $this->assertTrue($res['done']);
+        $this->assertSame(0, $this->items()->countByStatus($jobId)[ItemStatus::Skipped->value] ?? 0, '最初から読み直すので、先頭側の失敗分も戻る');
+    }
+
+    #[Test]
+    public function 戻せないアイテムばかりでも_再実行は時間の予算を守って区切る(): void
+    {
+        for ($i = 1; $i <= 6; $i++) {
+            $this->insertColumn('v' . $i, 'image', ['column_field_2' => "001/v{$i}.jpg"]);
+            $this->archives->put("001/v{$i}.jpg", 'V' . $i);
+        }
+        $jobId = $this->scannedJob(['targets' => ['unit_image']]);
+        $this->media->failRegister = true;
+        $runner = $this->runner();
+        $runner->runChunk($this->job($jobId));
+        $this->db->exec('DELETE FROM ' . $this->db->t('column') . ' WHERE column_id LIKE ?', ['v%']);
+
+        $first = $runner->requeueChunk($this->job($jobId), 0.0, true);
+
+        $this->assertSame(0, $first['requeued']);
+        $this->assertFalse($first['done'], '1 件も戻せなくても、予算が尽きたら区切って返す');
+        $res = $first;
+        for ($i = 0; $i < 10 && !$res['done']; $i++) {
+            $res = $runner->requeueChunk($this->job($jobId), 0.0);
+        }
+        $this->assertTrue($res['done'], '続けて呼べば最後まで進む');
+    }
+
+    #[Test]
+    public function 再実行は_読み込んだあとに別のタブで確定されたジョブを一時停止に戻さない(): void
+    {
+        $this->seedBasic();
+        $jobId = $this->scannedJob(['targets' => ['unit_image']]);
+        $this->media->failRegister = true;
+        $runner = $this->runner();
+        $runner->runChunk($this->job($jobId));
+        $stale = $this->job($jobId);
+        $this->assertSame(JobStatus::Completed, $stale->status);
+        $this->media->failRegister = false;
+        $this->db->exec('UPDATE ' . $this->db->t('a2m_job') . ' SET job_status = ? WHERE job_id = ?', ['finalized', $jobId]);
+
+        $runner->requeueChunk($stale, 600.0, true);
+
+        $this->assertSame(JobStatus::Finalized, $this->job($jobId)->status);
+    }
+
+    #[Test]
+    public function 行が無くなって戻せないアイテムがあっても_再実行は終わる(): void
+    {
+        $this->archives->put('001/a.jpg', 'A');
+        $this->insertColumn('gone', 'image', ['column_field_2' => '001/a.jpg']);
+        $this->insertColumn('stay', 'image', ['column_field_2' => '001/b.jpg']);
+        $this->archives->put('001/b.jpg', 'B');
+        $jobId = $this->scannedJob(['targets' => ['unit_image']]);
+        $this->media->failRegister = true;
+        $runner = $this->runner();
+        $runner->runChunk($this->job($jobId));
+        $this->db->exec('DELETE FROM ' . $this->db->t('column') . ' WHERE column_id = ?', ['gone']);
+
+        $this->media->failRegister = false;
+        $total = 0;
+        $res = ['requeued' => 0, 'done' => false];
+        for ($i = 0; $i < 5; $i++) {
+            $res = $runner->requeueChunk($this->job($jobId), 0.0);
+            $total += $res['requeued'];
+            if ($res['done']) {
+                break;
+            }
+        }
+        $this->assertTrue($res['done']);
+        $this->assertSame(1, $total);
     }
 
     #[Test]
@@ -366,7 +566,7 @@ final class JobRunnerTest extends A2mTestCase
         $this->seedBasic();
         $jobId = $this->scannedJob();
         $this->runner()->runChunk($this->job($jobId));
-        $this->assertSame(0, $this->runner()->requeue($this->job($jobId)));
+        $this->assertSame(0, $this->runner()->requeueChunk($this->job($jobId), 600.0, true)['requeued']);
         $this->assertSame(JobStatus::Completed, $this->job($jobId)->status);
     }
 
@@ -449,7 +649,7 @@ final class JobRunnerTest extends A2mTestCase
         $res = $this->runner()->runChunk($this->job($jobId));
         $this->assertSame('STALE_SNAPSHOT', $res->log[0]['reason']);
 
-        $this->assertSame(1, $this->runner()->requeue($this->job($jobId)));
+        $this->assertSame(1, $this->runner()->requeueChunk($this->job($jobId), 600.0, true)['requeued']);
         $item = $this->items()->byStatuses($jobId, [ItemStatus::Pending], 0, 1)[0];
         $this->assertSame(['002/new.jpg'], $item->sourcePaths, '再実行で現在のパスに更新される');
 

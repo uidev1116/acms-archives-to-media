@@ -45,15 +45,18 @@ class PathMapRepository
     }
 
     /**
-     * そのジョブが新規作成したメディア
+     * そのジョブが新規作成したメディアを、media_id の昇順で返す。
      *
+     * @param int $afterId この media_id より後
+     * @param int $limit 0 なら全件
      * @return list<int>
      */
-    public function mediaIdsCreatedByJob(int $jobId): array
+    public function mediaIdsCreatedByJob(int $jobId, int $afterId = 0, int $limit = 0): array
     {
         $rows = $this->db->all(
-            'SELECT DISTINCT map_media_id FROM ' . $this->db->t('a2m_path_map') . ' WHERE map_created_by_job = ?',
-            [$jobId]
+            'SELECT DISTINCT map_media_id FROM ' . $this->db->t('a2m_path_map')
+            . ' WHERE map_created_by_job = ? AND map_media_id > ? ORDER BY map_media_id' . ($limit > 0 ? ' LIMIT ' . $limit : ''),
+            [$jobId, $afterId]
         );
         return array_map(static fn (array $r): int => Cast::int($r['map_media_id']), $rows);
     }

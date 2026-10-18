@@ -10,6 +10,7 @@ export const JOB_STATUS_LABEL: Record<JobStatus, string> = {
   failed: '失敗',
   rolling_back: 'ロールバック中',
   rolled_back: 'ロールバック済み',
+  finalized: '確定済み',
 };
 
 export const ITEM_STATUS_LABEL: Record<string, string> = {
@@ -33,6 +34,7 @@ export const PREVIEW_LABEL: Record<string, string> = {
   reuse: '既存メディアを再利用',
   mixed: '新規と再利用が混在',
   skip: 'スキップ見込み',
+  unknown: '未判定（実行時に判定）',
 };
 
 export const OWNER_LABEL: Record<string, string> = {
@@ -49,6 +51,7 @@ export type BadgeVariant = 'success' | 'info' | 'warning' | 'danger' | 'approval
 export function jobStatusVariant(status: JobStatus): BadgeVariant {
   switch (status) {
     case 'completed':
+    case 'finalized':
       return 'success';
     case 'failed':
       return 'danger';

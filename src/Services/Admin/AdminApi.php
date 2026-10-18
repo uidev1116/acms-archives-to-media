@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Services\Admin;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\InvalidInputException;
 use Acms\Plugins\ArchivesToMedia\Services\Job\JobService;
 
 /**
@@ -14,6 +15,9 @@ class AdminApi
 {
     /** 一度に除外できるアイテム ID の上限 */
     private const MAX_IDS = 5000;
+
+    /** 一覧のページ番号の上限（巨大な OFFSET で DB に負荷をかけない） */
+    private const MAX_PAGE = 10000;
 
     public function __construct(private readonly JobService $service, private readonly DefinitionProvider $definitions)
     {
@@ -44,8 +48,9 @@ class AdminApi
             'requeue' => $this->requeue($input, $blogId),
             'cleanup' => $this->service->cleanup($this->jobId($input), $blogId)->toArray(),
             'rollback' => $this->service->rollback($this->jobId($input), $blogId, $this->bool($input, 'deleteCreatedMedia'))->toArray(),
+            'finalize' => $this->finalize($input, $blogId),
             'delete' => $this->delete($input, $blogId),
-            default => throw new \InvalidArgumentException('不明な操作です。'),
+            default => throw new InvalidInputException('不明な操作です。'),
         };
     }
 
@@ -56,8 +61,19 @@ class AdminApi
     private function requeue(array $input, int $blogId): array
     {
         $jobId = $this->jobId($input);
-        $count = $this->service->requeue($jobId, $blogId);
-        return ['requeued' => $count, 'job' => $this->service->get($jobId, $blogId)['job']];
+        $res = $this->service->requeueChunk($jobId, $blogId, $this->bool($input, 'restart'));
+        return ['requeued' => $res['requeued'], 'done' => $res['done'], 'job' => $this->service->get($jobId, $blogId)['job']];
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     * @return array<string, mixed>
+     */
+    private function finalize(array $input, int $blogId): array
+    {
+        $jobId = $this->jobId($input);
+        $res = $this->service->finalize($jobId, $blogId, $this->bool($input, 'keepLegacyKeys'));
+        return ['done' => $res['done'], 'job' => $this->service->get($jobId, $blogId)['job']];
     }
 
     /**
@@ -83,12 +99,12 @@ class AdminApi
                 $raw = json_decode($raw, true);
             }
             if (!is_array($raw) || count($raw) > self::MAX_IDS) {
-                throw new \InvalidArgumentException('ids が不正です（最大 ' . self::MAX_IDS . ' 件）。');
+                throw new InvalidInputException('ids が不正です（最大 ' . self::MAX_IDS . ' 件）。');
             }
             $ids = [];
             foreach ($raw as $id) {
                 if (!is_int($id) && !(is_string($id) && ctype_digit($id))) {
-                    throw new \InvalidArgumentException('ids が不正です。');
+                    throw new InvalidInputException('ids が不正です。');
                 }
                 $ids[] = (int) $id;
             }
@@ -114,7 +130,7 @@ class AdminApi
             $filters,
             is_string($input['sort'] ?? null) ? $input['sort'] : 'item_id',
             $this->bool($input, 'desc'),
-            $this->int($input, 'page', 1, false),
+            min(self::MAX_PAGE, $this->int($input, 'page', 1, false)),
             $this->int($input, 'perPage', 50, false),
         );
     }
@@ -149,7 +165,7 @@ class AdminApi
     {
         if (!isset($input[$key]) || $input[$key] === '') {
             if ($required) {
-                throw new \InvalidArgumentException($key . ' が必要です。');
+                throw new InvalidInputException($key . ' が必要です。');
             }
             return $default;
         }
@@ -158,10 +174,10 @@ class AdminApi
             $v = (int) $v;
         }
         if (!is_int($v)) {
-            throw new \InvalidArgumentException($key . ' が不正です。');
+            throw new InvalidInputException($key . ' が不正です。');
         }
         if ($required && $v < 1) {
-            throw new \InvalidArgumentException($key . ' が不正です。');
+            throw new InvalidInputException($key . ' が不正です。');
         }
         // 極端に大きい値（ページ番号のオフセット溢れなど）を避けるため、上限を設ける
         return $required ? $v : min(1_000_000, max($default > 0 ? 1 : 0, $v));
@@ -186,11 +202,11 @@ class AdminApi
             return $raw;
         }
         if (!is_string($raw)) {
-            throw new \InvalidArgumentException($key . ' が必要です。');
+            throw new InvalidInputException($key . ' が必要です。');
         }
         $data = json_decode($raw, true);
         if (!is_array($data)) {
-            throw new \InvalidArgumentException($key . ' が不正な JSON です。');
+            throw new InvalidInputException($key . ' が不正な JSON です。');
         }
         return $data;
     }

@@ -20,6 +20,8 @@ class DefinitionProvider
         private readonly Db $db,
         private readonly BlogScope $scope,
         private readonly \Closure $mediaUnitTypes,
+        /** @var (\Closure(int): bool)|null 指定ブログの管理権限があるか。null なら絞り込まない */
+        private readonly ?\Closure $canAdminister = null,
     ) {
     }
 
@@ -29,6 +31,13 @@ class DefinitionProvider
     public function get(int $blogId): array
     {
         $ids = $this->scope->blogIds($blogId, true);
+        if ($this->canAdminister !== null) {
+            // 管理権限の無い子ブログのフィールド名やユニットの件数は見せない
+            $ids = array_values(array_filter($ids, $this->canAdminister));
+        }
+        if ($ids === []) {
+            $ids = [$blogId];
+        }
         $in = $this->db->placeholders($ids);
 
         $media = array_values(array_unique(array_filter(

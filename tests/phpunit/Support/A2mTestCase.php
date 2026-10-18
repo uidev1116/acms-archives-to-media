@@ -15,6 +15,7 @@ use Acms\Plugins\ArchivesToMedia\Services\Media\ArchiveMediaResolver;
 use Acms\Plugins\ArchivesToMedia\Services\Media\MediaReferenceChecker;
 use Acms\Plugins\ArchivesToMedia\Services\Support\CacheInvalidator;
 use Acms\Plugins\ArchivesToMedia\Services\Support\EntryLockGuard;
+use Acms\Plugins\ArchivesToMedia\Services\Support\EntrySerializer;
 use Acms\Services\Common\Lock;
 use Acms\Services\Entry\Lock as EntryLock;
 use Acms\Plugins\ArchivesToMedia\Services\Media\BlogOwnershipFixer;
@@ -79,6 +80,7 @@ abstract class A2mTestCase extends DatabaseTestCase
             new MediaMetaWriter($this->db, $this->media),
             $this->archives->dir,
             $maxSize,
+            $this->db,
         );
     }
 
@@ -113,7 +115,7 @@ abstract class A2mTestCase extends DatabaseTestCase
     /**
      * @param list<\Acms\Plugins\ArchivesToMedia\Services\Converter\ConverterInterface>|null $converters
      */
-    protected function runner(?array $converters = null, ?\Closure $lockFactory = null): JobRunner
+    protected function runner(?array $converters = null, ?\Closure $lockFactory = null, ?EntrySerializer $entries = null): JobRunner
     {
         return new JobRunner(
             $converters ?? [$this->unitImageConverter(), $this->unitFileConverter(), $this->fieldConverter()],
@@ -124,6 +126,7 @@ abstract class A2mTestCase extends DatabaseTestCase
             new CacheInvalidator($this->db),
             $this->db,
             $lockFactory ?? $this->lockFactory(),
+            $entries ?? new EntrySerializer(),
         );
     }
 
@@ -139,7 +142,7 @@ abstract class A2mTestCase extends DatabaseTestCase
     /**
      * @param list<\Acms\Plugins\ArchivesToMedia\Services\Converter\ConverterInterface>|null $converters
      */
-    protected function rollbacker(?array $converters = null): Rollbacker
+    protected function rollbacker(?array $converters = null, ?EntrySerializer $entries = null): Rollbacker
     {
         return new Rollbacker(
             $converters ?? [$this->unitImageConverter(), $this->unitFileConverter(), $this->fieldConverter()],
@@ -151,10 +154,12 @@ abstract class A2mTestCase extends DatabaseTestCase
             new CacheInvalidator($this->db),
             $this->lockFactory(),
             new FieldStore($this->db),
+            $entries ?? new EntrySerializer(),
+            new EntryLockGuard($this->db, new EntryLock('on', 'off', 48)),
         );
     }
 
-    protected function cleaner(): \Acms\Plugins\ArchivesToMedia\Services\Job\Cleaner
+    protected function cleaner(?EntrySerializer $entries = null): \Acms\Plugins\ArchivesToMedia\Services\Job\Cleaner
     {
         return new \Acms\Plugins\ArchivesToMedia\Services\Job\Cleaner(
             $this->items(),
@@ -164,6 +169,7 @@ abstract class A2mTestCase extends DatabaseTestCase
             new EntryLockGuard($this->db, new EntryLock('on', 'off', 48)),
             new CacheInvalidator($this->db),
             $this->lockFactory(),
+            $entries ?? new EntrySerializer(),
         );
     }
 

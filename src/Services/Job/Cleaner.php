@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Services\Job;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\StateException;
 use Acms\Plugins\ArchivesToMedia\Services\Converter\FieldNameResolver;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\Item;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\ItemStatus;
@@ -14,7 +15,10 @@ use Acms\Plugins\ArchivesToMedia\Services\Domain\ReasonCode;
 use Acms\Plugins\ArchivesToMedia\Services\Repository\ItemRepository;
 use Acms\Plugins\ArchivesToMedia\Services\Repository\JobRepository;
 use Acms\Plugins\ArchivesToMedia\Services\Support\CacheInvalidator;
+use Acms\Plugins\ArchivesToMedia\Services\Support\EntryBusyException;
+use Acms\Plugins\ArchivesToMedia\Services\Support\ErrorMessage;
 use Acms\Plugins\ArchivesToMedia\Services\Support\EntryLockGuard;
+use Acms\Plugins\ArchivesToMedia\Services\Support\EntrySerializer;
 use Acms\Plugins\ArchivesToMedia\Services\Support\FieldStore;
 use Acms\Plugins\ArchivesToMedia\Services\Support\Snapshot;
 use Acms\Services\Common\Lock;
@@ -40,6 +44,7 @@ class Cleaner
         private readonly EntryLockGuard $lockGuard,
         private readonly CacheInvalidator $cache,
         private readonly \Closure $lockFactory,
+        private readonly EntrySerializer $entries = new EntrySerializer(),
     ) {
     }
 
@@ -50,7 +55,7 @@ class Cleaner
     public function cleanupChunk(Job $job, float $timeBudget = 20.0): ChunkResult
     {
         if ($job->status !== JobStatus::Completed) {
-            throw new \LogicException('クリーンアップは、変換が完了したジョブだけで実行できます: ' . $job->status->value);
+            throw new StateException('クリーンアップは、変換が完了したジョブだけで実行できます: ' . $job->status->value);
         }
         // 同名モードは旧キーを変換時に置き換え済み（クリーンアップするものが無い）
         if ($job->options->fieldMode === 'same') {
@@ -122,18 +127,22 @@ class Cleaner
         }
 
         try {
-            Database::beginTransaction();
-            try {
-                $rows = $this->store->family($loc, $fd);
-                $this->store->deleteFamily($loc, $fd);
-                $this->items->markCleaned($item->id, array_map(static fn (array $r): array => Snapshot::normalizeRow($r), $rows));
-                Database::commit();
-            } catch (\Throwable $e) {
-                Database::rollBack();
-                throw $e;
-            }
+            $this->entries->run($this->lockGuard->entryIdOf($loc), function () use ($item, $loc, $fd): void {
+                Database::beginTransaction();
+                try {
+                    $rows = $this->store->family($loc, $fd);
+                    $this->store->deleteFamily($loc, $fd);
+                    $this->items->markCleaned($item->id, array_map(static fn (array $r): array => Snapshot::normalizeRow($r), $rows));
+                    Database::commit();
+                } catch (\Throwable $e) {
+                    Database::rollBack();
+                    throw $e;
+                }
+            });
+        } catch (EntryBusyException) {
+            return $this->result('skipped', ReasonCode::EntryLocked);
         } catch (\Throwable $e) {
-            return $this->result('error', ReasonCode::UnknownError, $e->getMessage());
+            return $this->result('error', ReasonCode::UnknownError, ErrorMessage::of($e, 'クリーンアップでエラーになりました（アイテム ' . $item->id . '）'));
         }
         $this->cache->collect($loc, $item->blogId);
         return $this->result('converted', null);

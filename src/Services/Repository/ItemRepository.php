@@ -10,6 +10,7 @@ use Acms\Plugins\ArchivesToMedia\Services\Domain\Item;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\ItemStatus;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\ReasonCode;
 use Acms\Plugins\ArchivesToMedia\Services\Support\Db;
+use Acms\Plugins\ArchivesToMedia\Services\Support\RecordTooLongException;
 
 class ItemRepository
 {
@@ -19,6 +20,7 @@ class ItemRepository
 
     /**
      * 候補をアイテムとして登録する。同じ所在のアイテムが既にあれば何もしない（スキャン再開の冪等性）。
+     * 重複（ユニークキー）だけを無視する。列に入らない値などの書き込みエラーは、握りつぶさず例外にする。
      *
      * @param array<mixed> $before
      * @return int|null 登録した item_id。重複なら null
@@ -33,11 +35,18 @@ class ItemRepository
         ?string $message = null,
     ): ?int {
         $locatorJson = json_encode($candidate->locator->toArray(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        $pathsJson = json_encode($candidate->sourcePaths, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        // コアは接続ごとに sql_mode を空に近い設定（ALLOW_INVALID_DATES）にするので、列に入らない値は黙って切り詰められる。
+        // 壊れた JSON を保存してしまわないよう、列の上限をここで確かめる。
+        if (mb_strlen($locatorJson) > 512 || strlen($pathsJson) > 65535 || mb_strlen((string) $candidate->ownerId) > 36) {
+            throw new RecordTooLongException('候補の所在または元ファイルのパスが長すぎて記録できません。');
+        }
         $affected = $this->db->exec(
-            'INSERT IGNORE INTO ' . $this->db->t('a2m_item') . '
+            'INSERT INTO ' . $this->db->t('a2m_item') . '
              (item_job_id, item_target, item_table, item_locator, item_locator_hash, item_owner_type, item_owner_id,
               item_source_paths, item_preview, item_status, item_reason, item_message, item_before, item_blog_id, item_updated_datetime)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE item_id = item_id',
             [
                 $jobId,
                 $candidate->target->value,
@@ -46,7 +55,7 @@ class ItemRepository
                 sha1($locatorJson),
                 $candidate->ownerType,
                 (string) $candidate->ownerId,
-                json_encode($candidate->sourcePaths, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+                $pathsJson,
                 $preview,
                 $status->value,
                 $reason === null ? '' : $reason->value,
@@ -59,9 +68,22 @@ class ItemRepository
         return $affected > 0 ? $this->db->lastInsertId() : null;
     }
 
-    public function deleteByJob(int $jobId): void
+    /**
+     * ジョブのアイテムを $batch 件ずつ消す（数十万行の longtext を 1 文で消すとタイムアウトしうる）。
+     * 時間の予算を超えたら、残っていても止めて false を返す（もう一度呼ぶと続きから消す）。
+     *
+     * @return bool すべて消した
+     */
+    public function deleteByJob(int $jobId, float $timeBudget = 15.0, int $batch = 5000): bool
     {
-        $this->db->exec('DELETE FROM ' . $this->db->t('a2m_item') . ' WHERE item_job_id = ?', [$jobId]);
+        $started = microtime(true);
+        do {
+            $deleted = $this->db->exec('DELETE FROM ' . $this->db->t('a2m_item') . ' WHERE item_job_id = ? LIMIT ' . max(1, $batch), [$jobId]);
+            if ($deleted < $batch) {
+                return true;
+            }
+        } while ((microtime(true) - $started) < $timeBudget);
+        return false;
     }
 
     public function find(int $id): ?Item
@@ -85,7 +107,22 @@ class ItemRepository
      */
     public function nextConverted(int $jobId, int $limit): array
     {
-        return $this->byStatus($jobId, ItemStatus::Converted, $limit, true);
+        return $this->nextConvertedBefore($jobId, PHP_INT_MAX, $limit);
+    }
+
+    /**
+     * 変換済みのアイテムを、$beforeId より小さい item_id の中で新しい順に返す。
+     * 戻せなかった（別の処理が更新中など）アイテムが変換済みのまま残っても、同じ位置で空回りしないためのカーソル。
+     *
+     * @return list<Item>
+     */
+    public function nextConvertedBefore(int $jobId, int $beforeId, int $limit): array
+    {
+        $rows = $this->db->all(
+            'SELECT * FROM ' . $this->db->t('a2m_item') . ' WHERE item_job_id = ? AND item_status = ? AND item_id < ? ORDER BY item_id DESC LIMIT ' . max(1, $limit),
+            [$jobId, ItemStatus::Converted->value, $beforeId]
+        );
+        return array_map(static fn (array $r): Item => Item::fromRow($r), $rows);
     }
 
     /**
@@ -238,6 +275,32 @@ class ItemRepository
     }
 
     /**
+     * ロールバック用のスナップショット（変換前後の行、クリーンアップで消した行）を、$afterId の続きから $limit 件分捨てる。
+     * 件数・結果・メディア ID は残す。数十万行の longtext を 1 文で書き換えるとタイムアウトしうるので、
+     * item_id の範囲で区切る（既に消した範囲を読み直さない）。呼び出し側は、返した last を次の afterId にして繰り返す。
+     *
+     * @return array{last: int, count: int} last: 今回処理した最後の item_id（count が 0 なら $afterId のまま）
+     */
+    public function purgeSnapshots(int $jobId, int $afterId, int $limit): array
+    {
+        $rows = $this->db->all(
+            'SELECT item_id FROM ' . $this->db->t('a2m_item') . ' WHERE item_job_id = ? AND item_id > ? ORDER BY item_id LIMIT ' . max(1, $limit),
+            [$jobId, $afterId]
+        );
+        if ($rows === []) {
+            return ['last' => $afterId, 'count' => 0];
+        }
+        $first = Cast::int($rows[0]['item_id']);
+        $last = Cast::int($rows[count($rows) - 1]['item_id']);
+        $this->db->exec(
+            'UPDATE ' . $this->db->t('a2m_item') . ' SET item_before = NULL, item_after = NULL, item_cleanup = NULL'
+            . ' WHERE item_job_id = ? AND item_id BETWEEN ? AND ?',
+            [$jobId, $first, $last]
+        );
+        return ['last' => $last, 'count' => count($rows)];
+    }
+
+    /**
      * @return array<string, int> status => 件数
      */
     public function countByStatus(int $jobId): array
@@ -275,26 +338,70 @@ class ItemRepository
     }
 
     /**
+     * CSV 出力用に、item_id の昇順で $afterId の続きを読む（OFFSET を使わない）。
+     *
+     * @param list<int>|null $blogIds 指定すると、そのブログの行だけ
+     * @return list<array<string, mixed>>
+     */
+    public function exportRows(int $jobId, int $afterId, int $limit, ?array $blogIds = null): array
+    {
+        [$blogSql, $blogParams] = $this->blogSql($blogIds);
+        return $this->db->all(
+            'SELECT item_id, item_target, item_table, item_locator, item_owner_type, item_owner_id, item_source_paths, item_preview,
+                    item_media_ids, item_status, item_reason, item_message, item_blog_id
+             FROM ' . $this->db->t('a2m_item') . ' WHERE item_job_id = ? AND item_id > ?' . $blogSql . ' ORDER BY item_id ASC LIMIT ' . max(1, $limit),
+            [$jobId, $afterId, ...$blogParams]
+        );
+    }
+
+    /**
      * 一覧用の検索
      *
+     * 並べ替えと切り出しは item_id だけを取って行い（長い列を一時テーブルに持ち込まない）、
+     * 選ばれた行だけをあとから読む。絞り込みが無く、ジョブの総数が分かっている（$knownTotal）ときは数え直さない。
+     *
      * @param array<string, string> $filters target / status / reason / owner / q
+     * @param int|null $knownTotal 絞り込み無しのときの総数（ジョブの集計値）
+     * @param list<int>|null $blogIds 指定すると、そのブログの行だけ
      * @return array{items: list<array<string, mixed>>, total: int}
      */
-    public function search(int $jobId, array $filters, string $sort, bool $desc, int $page, int $perPage): array
+    public function search(int $jobId, array $filters, string $sort, bool $desc, int $page, int $perPage, ?int $knownTotal = null, ?array $blogIds = null): array
     {
         $perPage = max(1, min(200, $perPage));
         $offset = (max(1, $page) - 1) * $perPage;
         [$where, $params] = $this->filterSql($jobId, $filters);
+        [$blogSql, $blogParams] = $this->blogSql($blogIds);
+        $where .= $blogSql;
+        array_push($params, ...$blogParams);
         $sortable = ['item_id', 'item_target', 'item_status', 'item_owner_type', 'item_preview', 'item_reason'];
         $order = in_array($sort, $sortable, true) ? $sort : 'item_id';
-        $rows = $this->db->all(
-            'SELECT item_id, item_target, item_table, item_locator, item_owner_type, item_owner_id, item_source_paths, item_preview,
-                    item_media_ids, item_status, item_reason, item_message, item_blog_id
-             FROM ' . $this->db->t('a2m_item') . ' WHERE ' . $where . ' ORDER BY ' . $order . ($desc ? ' DESC' : ' ASC') . ', item_id ASC LIMIT ' . $perPage . ' OFFSET ' . $offset,
+        $idRows = $this->db->all(
+            'SELECT item_id FROM ' . $this->db->t('a2m_item') . ' WHERE ' . $where . ' ORDER BY ' . $order . ($desc ? ' DESC' : ' ASC') . ', item_id ASC LIMIT ' . $perPage . ' OFFSET ' . $offset,
             $params
         );
-        $total = Cast::int($this->db->one('SELECT COUNT(*) FROM ' . $this->db->t('a2m_item') . ' WHERE ' . $where, $params));
-        return ['items' => $rows, 'total' => $total];
+        $ids = array_map(static fn (array $r): int => Cast::int($r['item_id']), $idRows);
+        $items = [];
+        if ($ids !== []) {
+            $rows = $this->db->all(
+                'SELECT item_id, item_target, item_table, item_locator, item_owner_type, item_owner_id, item_source_paths, item_preview,
+                        item_media_ids, item_status, item_reason, item_message, item_blog_id
+                 FROM ' . $this->db->t('a2m_item') . ' WHERE item_id IN (' . $this->db->placeholders($ids) . ')',
+                $ids
+            );
+            $byId = [];
+            foreach ($rows as $row) {
+                $byId[Cast::int($row['item_id'])] = $row;
+            }
+            foreach ($ids as $id) {
+                if (isset($byId[$id])) {
+                    $items[] = $byId[$id];
+                }
+            }
+        }
+        $total = $filters === [] && $blogIds === null && $knownTotal !== null
+            ? $knownTotal
+            : Cast::int($this->db->one('SELECT COUNT(*) FROM ' . $this->db->t('a2m_item') . ' WHERE ' . $where, $params));
+        return ['items' => $items, 'total' => $total];
     }
 
     /**
@@ -307,6 +414,21 @@ class ItemRepository
             [$jobId, $status->value]
         );
         return array_map(static fn (array $r): Item => Item::fromRow($r), $rows);
+    }
+
+    /**
+     * @param list<int>|null $blogIds
+     * @return array{0: string, 1: list<int>}
+     */
+    private function blogSql(?array $blogIds): array
+    {
+        if ($blogIds === null) {
+            return ['', []];
+        }
+        if ($blogIds === []) {
+            return [' AND 1 = 0', []];
+        }
+        return [' AND item_blog_id IN (' . $this->db->placeholders($blogIds) . ')', $blogIds];
     }
 
     /**

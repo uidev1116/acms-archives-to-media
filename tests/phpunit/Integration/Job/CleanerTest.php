@@ -55,6 +55,21 @@ final class CleanerTest extends A2mTestCase
     }
 
     #[Test]
+    public function エントリーが更新中でロックを取れなければ_ENTRY_LOCKEDでスキップし旧キーを消さない(): void
+    {
+        $jobId = $this->convertedFieldJob();
+        $before = $this->fieldDump();
+
+        $res = $this->cleaner(new \Acms\Plugins\ArchivesToMedia\Services\Support\EntrySerializer(static function (int $eid): never {
+            throw new \Acms\Services\Unit\Exceptions\UnitLockTimeoutException($eid);
+        }))->cleanupChunk($this->job($jobId));
+
+        $this->assertSame([0, 3, 0], [$res->converted, $res->skipped, $res->error]);
+        $this->assertSame($before, $this->fieldDump());
+        $this->assertSame(['cleanable' => 3, 'cleaned' => 0], $this->items()->cleanupCounts($jobId));
+    }
+
+    #[Test]
     public function 別名モードの旧キーだけを消し_新しいフィールドとグループ定義は残す(): void
     {
         $jobId = $this->convertedFieldJob();

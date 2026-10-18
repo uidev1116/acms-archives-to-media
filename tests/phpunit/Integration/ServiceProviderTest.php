@@ -57,12 +57,50 @@ final class ServiceProviderTest extends A2mTestCase
             'archives-to-media.api-endpoint' => ApiEndpoint::class,
             'archives-to-media.admin-bootstrap' => AdminBootstrap::class,
             'archives-to-media.lock' => Lock::class,
+            'archives-to-media.entry-serializer' => \Acms\Plugins\ArchivesToMedia\Services\Support\EntrySerializer::class,
+            'archives-to-media.cleaner' => \Acms\Plugins\ArchivesToMedia\Services\Job\Cleaner::class,
         ];
         foreach ($expected as $alias => $class) {
             $this->assertInstanceOf($class, App::make($alias), $alias);
         }
         $this->assertIsArray(App::make('archives-to-media.converters'));
         $this->assertCount(3, App::make('archives-to-media.converters'));
+    }
+
+    #[Test]
+    public function 書き込みはコアのUnitLockの中で行う(): void
+    {
+        $this->provider();
+        $serializer = App::make('archives-to-media.entry-serializer');
+        $this->assertInstanceOf(\Acms\Plugins\ArchivesToMedia\Services\Support\EntrySerializer::class, $serializer);
+
+        $name = \Acms\Services\Unit\UnitLock::generateLockName(4242);
+        // 別の接続が同じエントリーのロックを持っていれば、タイムアウトして EntryBusyException になる
+        $env = static function (string $key, string $default): string {
+            $value = getenv($key);
+            return is_string($value) && $value !== '' ? $value : $default;
+        };
+        $pdo = new \PDO(
+            'mysql:host=' . $env('ACMS_DB_HOST', 'db') . ';dbname=' . $env('ACMS_DB_NAME', ''),
+            $env('ACMS_DB_USER', 'root'),
+            $env('ACMS_DB_PASS', ''),
+        );
+        $pdo->query("SELECT GET_LOCK('" . $name . "', 1)");
+        try {
+            $this->expectException(\Acms\Plugins\ArchivesToMedia\Services\Support\EntryBusyException::class);
+            $serializer->run(4242, static fn (): int => 1);
+        } finally {
+            $pdo->query("SELECT RELEASE_LOCK('" . $name . "')");
+        }
+    }
+
+    #[Test]
+    public function 画面に渡すバージョンは_拡張アプリのバージョンと同じ(): void
+    {
+        $provider = $this->provider();
+        $bootstrap = App::make('archives-to-media.admin-bootstrap');
+        $this->assertInstanceOf(AdminBootstrap::class, $bootstrap);
+        $this->assertSame($provider->version, $bootstrap->toArray()['version']);
     }
 
     #[Test]

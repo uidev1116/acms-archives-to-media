@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Services\Domain;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\InvalidInputException;
+
 /**
  * ジョブのオプション（設計書 §7.4）。JSON との相互変換と検証を担う値オブジェクト。
  */
@@ -60,11 +62,12 @@ final class JobOptions
      * 入力（JSON をデコードした配列）から検証してオブジェクトを作る。
      *
      * 不正な値は黙って直さず例外にする（ただし欠けているキーは既定値で補う）。
+     * $strict は、画面からの新しい入力にだけ付ける。保存済みの JSON を読み込むとき（fromJson）は付けない。
      *
      * @param array<mixed> $data
      * @throws \InvalidArgumentException
      */
-    public static function fromArray(array $data): self
+    public static function fromArray(array $data, bool $strict = false): self
     {
         $targets = [];
         $rawTargets = self::listOf($data['targets'] ?? null) ?? array_map(
@@ -74,7 +77,7 @@ final class JobOptions
         foreach ($rawTargets as $raw) {
             $target = is_string($raw) ? TargetType::tryFrom($raw) : null;
             if ($target === null) {
-                throw new \InvalidArgumentException('不正な変換対象です。');
+                throw new InvalidInputException('不正な変換対象です。');
             }
             if (!in_array($target, $targets, true)) {
                 $targets[] = $target;
@@ -84,35 +87,40 @@ final class JobOptions
         $unitTypeMap = [];
         $rawMap = $data['unitTypeMap'] ?? [];
         if (!is_array($rawMap)) {
-            throw new \InvalidArgumentException('unitTypeMap が不正です。');
+            throw new InvalidInputException('unitTypeMap が不正です。');
         }
         foreach ($rawMap as $from => $to) {
             if (!is_string($to) || preg_match('/^(image|file)(_\d+)?$/D', (string) $from) !== 1 || preg_match('/^media(_\d+)?$/D', $to) !== 1) {
-                throw new \InvalidArgumentException('ユニット種類のマッピングが不正です。');
+                throw new InvalidInputException('ユニット種類のマッピングが不正です。');
             }
             $unitTypeMap[(string) $from] = $to;
         }
 
         $field = $data['field'] ?? [];
         if (!is_array($field)) {
-            throw new \InvalidArgumentException('field が不正です。');
+            throw new InvalidInputException('field が不正です。');
         }
         $mode = $field['mode'] ?? self::FIELD_MODE_SAME;
         if (!in_array($mode, [self::FIELD_MODE_SUFFIX, self::FIELD_MODE_SAME, self::FIELD_MODE_CUSTOM], true)) {
-            throw new \InvalidArgumentException('フィールドの書き込み先モードが不正です。');
+            throw new InvalidInputException('フィールドの書き込み先モードが不正です。');
         }
         $suffix = $field['suffix'] ?? '_media';
         if (!is_string($suffix) || preg_match('/^[A-Za-z0-9_\-]{1,32}$/D', $suffix) !== 1) {
-            throw new \InvalidArgumentException('フィールド名の接尾辞が不正です。');
+            throw new InvalidInputException('フィールド名の接尾辞が不正です。');
         }
         $custom = [];
         $rawCustom = $field['custom'] ?? [];
         if (!is_array($rawCustom)) {
-            throw new \InvalidArgumentException('field.custom が不正です。');
+            throw new InvalidInputException('field.custom が不正です。');
         }
         foreach ($rawCustom as $from => $to) {
             if (!is_string($to) || !self::isFieldName((string) $from) || !self::isFieldName($to)) {
-                throw new \InvalidArgumentException('フィールド名のマッピングが不正です。');
+                throw new InvalidInputException('フィールド名のマッピングが不正です。');
+            }
+            // 新しく作る入力（$strict）だけで拒否する。この検証を入れる前に保存されたジョブは、読み込めなければならない
+            if ($strict && $mode === self::FIELD_MODE_CUSTOM && $to === (string) $from) {
+                // 元と同じ名前は同名モードと同じ書き換えになるが、旧キーの扱いが違ってしまう。同名にしたいなら同名モードを選ぶ
+                throw new InvalidInputException('カスタム名は、元のフィールド名と別の名前にしてください（同じ名前にするなら「同名」モードを選びます）。');
             }
             $custom[(string) $from] = $to;
         }
@@ -124,23 +132,23 @@ final class JobOptions
 
         $media = $data['media'] ?? [];
         if (!is_array($media)) {
-            throw new \InvalidArgumentException('media が不正です。');
+            throw new InvalidInputException('media が不正です。');
         }
         $enlarged = $media['enlarged'] ?? 'auto';
         if (!is_string($enlarged) || !in_array($enlarged, self::ENLARGED, true)) {
-            throw new \InvalidArgumentException('enlarged が不正です。');
+            throw new InvalidInputException('enlarged が不正です。');
         }
         $tags = [];
         foreach (self::listOf($media['tags'] ?? []) ?? [] as $tag) {
             if (!is_string($tag) || trim($tag) === '' || str_contains($tag, ',') || mb_strlen($tag) > 64) {
-                throw new \InvalidArgumentException('タグが不正です。');
+                throw new InvalidInputException('タグが不正です。');
             }
             $tags[] = trim($tag);
         }
 
         $chunk = $data['chunkSize'] ?? 20;
         if (!is_int($chunk) && !(is_string($chunk) && ctype_digit($chunk))) {
-            throw new \InvalidArgumentException('chunkSize が不正です。');
+            throw new InvalidInputException('chunkSize が不正です。');
         }
         $chunk = max(1, min(100, (int) $chunk));
 
@@ -233,7 +241,7 @@ final class JobOptions
             return null;
         }
         if (!is_array($value)) {
-            throw new \InvalidArgumentException('配列が必要です。');
+            throw new InvalidInputException('配列が必要です。');
         }
         return array_values($value);
     }
@@ -246,7 +254,7 @@ final class JobOptions
         $out = [];
         foreach (self::listOf($value) ?? [] as $name) {
             if (!is_string($name) || !self::isFieldName($name)) {
-                throw new \InvalidArgumentException('フィールド名が不正です。');
+                throw new InvalidInputException('フィールド名が不正です。');
             }
             $out[] = $name;
         }
@@ -267,7 +275,7 @@ final class JobOptions
         $out = [];
         foreach ($list as $v) {
             if (!is_string($v) || !in_array($v, $allowed, true)) {
-                throw new \InvalidArgumentException('不正な値が含まれています。');
+                throw new InvalidInputException('不正な値が含まれています。');
             }
             if (!in_array($v, $out, true)) {
                 $out[] = $v;

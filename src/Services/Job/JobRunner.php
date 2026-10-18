@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Acms\Plugins\ArchivesToMedia\Services\Job;
 
+use Acms\Plugins\ArchivesToMedia\Services\Support\StateException;
 use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Converter\ConversionSkipException;
 use Acms\Plugins\ArchivesToMedia\Services\Converter\ConverterInterface;
@@ -19,7 +20,10 @@ use Acms\Plugins\ArchivesToMedia\Services\Repository\ItemRepository;
 use Acms\Plugins\ArchivesToMedia\Services\Repository\JobRepository;
 use Acms\Plugins\ArchivesToMedia\Services\Support\CacheInvalidator;
 use Acms\Plugins\ArchivesToMedia\Services\Support\Db;
+use Acms\Plugins\ArchivesToMedia\Services\Support\EntryBusyException;
+use Acms\Plugins\ArchivesToMedia\Services\Support\ErrorMessage;
 use Acms\Plugins\ArchivesToMedia\Services\Support\EntryLockGuard;
+use Acms\Plugins\ArchivesToMedia\Services\Support\EntrySerializer;
 use Acms\Plugins\ArchivesToMedia\Services\Support\Snapshot;
 use Acms\Services\Common\Lock;
 
@@ -46,6 +50,7 @@ class JobRunner
         private readonly CacheInvalidator $cache,
         private readonly Db $db,
         private readonly \Closure $lockFactory,
+        private readonly EntrySerializer $entries = new EntrySerializer(),
     ) {
     }
 
@@ -56,7 +61,7 @@ class JobRunner
     public function runChunk(Job $job, float $timeBudget = 20.0): ChunkResult
     {
         if (!$job->status->canRun()) {
-            throw new \LogicException('このジョブは実行できない状態です: ' . $job->status->value);
+            throw new StateException('このジョブは実行できない状態です: ' . $job->status->value);
         }
         $lock = ($this->lockFactory)();
         if (!$lock->tryLock()) {
@@ -69,7 +74,10 @@ class JobRunner
         $processed = 0;
 
         try {
-            $this->jobs->setStatus($job->id, JobStatus::Running);
+            // 読み込んだあとに別の操作で状態が変わっていないか、状態を条件にして確かめながら実行中にする
+            if (!$this->jobs->transition($job->id, [JobStatus::Scanned, JobStatus::Running, JobStatus::Paused, JobStatus::Failed], JobStatus::Running)) {
+                throw new StateException('ジョブの状態が変わったため、実行を始められませんでした。画面を読み込み直してください。');
+            }
             foreach ($this->items->nextPending($job->id, $job->options->chunkSize) as $item) {
                 if ($processed > 0 && (microtime(true) - $started) > $timeBudget) {
                     break;
@@ -87,8 +95,10 @@ class JobRunner
                 $this->jobs->setStatus($job->id, JobStatus::Completed);
             }
             $remainingCount = $done ? 0 : $this->countPending($job->id);
+        } catch (StateException $e) {
+            throw $e; // 状態が変わっていた。今の状態を上書きしない
         } catch (\Throwable $e) {
-            $this->jobs->setStatus($job->id, JobStatus::Failed, $e->getMessage());
+            $this->jobs->setStatus($job->id, JobStatus::Failed, ErrorMessage::of($e, '変換のチャンクが失敗しました'));
             throw $e;
         } finally {
             $this->cache->flush();
@@ -116,20 +126,24 @@ class JobRunner
     }
 
     /**
-     * スキップ・エラー分を、スナップショットを取り直して pending に戻す。
+     * スキップ・エラー分を、時間の予算の範囲で pending に戻す。続きは、もう一度呼ぶと進む
+     * （位置はジョブのカーソルに持つ。$restart が true なら、前回の位置を捨てて最初から読む）。戻せない（行が無くなった・パスが空になった）ものは飛ばす。
      *
-     * @return int 戻した件数
+     * @return array{requeued: int, done: bool}
      */
-    public function requeue(Job $job): int
+    public function requeueChunk(Job $job, float $timeBudget = 15.0, bool $restart = false): array
     {
         if (!in_array($job->status, [JobStatus::Completed, JobStatus::Paused, JobStatus::Running, JobStatus::Failed], true)) {
-            throw new \LogicException('このジョブはスキップ分を再実行できない状態です: ' . $job->status->value);
+            throw new StateException('このジョブはスキップ分を再実行できない状態です: ' . $job->status->value);
         }
+        $started = microtime(true);
         $count = 0;
-        $afterId = 0;
+        $afterId = $restart ? 0 : $this->requeueCursor($job);
+        $done = false;
         while (true) {
-            $batch = $this->items->byStatuses($job->id, [ItemStatus::Skipped, ItemStatus::Error], $afterId, 100);
+            $batch = $this->items->byStatuses($job->id, [ItemStatus::Skipped, ItemStatus::Error], $afterId, 20);
             if ($batch === []) {
+                $done = true;
                 break;
             }
             foreach ($batch as $item) {
@@ -137,18 +151,31 @@ class JobRunner
                 $converter = $this->converterFor($item->target);
                 $before = $converter?->snapshot($item->locator, $job->options);
                 $paths = $converter?->currentSourcePaths($item->locator);
-                if ($before === null || $paths === null || count(array_filter($paths, static fn (string $p): bool => $p !== '')) === 0) {
-                    continue; // 行が無くなった・パスが空になったものは戻さない
+                if ($before !== null && $paths !== null && count(array_filter($paths, static fn (string $p): bool => $p !== '')) > 0) {
+                    $this->items->requeue($item->id, $before, $paths);
+                    $count++;
                 }
-                $this->items->requeue($item->id, $before, $paths);
-                $count++;
+                // 戻せないアイテムばかりでも時間の予算を守る（戻せたかどうかに関係なく、1 件進むたびに確かめる）
+                if ((microtime(true) - $started) > $timeBudget) {
+                    break 2;
+                }
             }
         }
+        // ジョブのカーソルは他の操作（ロールバックなど）も使うが、そちらは冪等で、失っても最初からやり直すだけ。
+        // 再実行が続きを見失って同じ位置を繰り返す方が困るので、再実行のカーソルは常に書く。
+        $this->jobs->setCursor($job->id, $done ? null : 'requeue:' . $afterId);
         if ($count > 0) {
             $this->jobs->refreshCounts($job->id);
-            $this->jobs->setStatus($job->id, JobStatus::Paused);
+            // 別のタブで確定（Finalized）などに変わっていたら、上書きしない
+            $this->jobs->transition($job->id, [JobStatus::Completed, JobStatus::Paused, JobStatus::Running, JobStatus::Failed], JobStatus::Paused);
         }
-        return $count;
+        return ['requeued' => $count, 'done' => $done];
+    }
+
+    private function requeueCursor(Job $job): int
+    {
+        $raw = $job->scanCursor;
+        return $raw !== null && str_starts_with($raw, 'requeue:') ? (int) substr($raw, 8) : 0;
     }
 
     /**
@@ -178,29 +205,11 @@ class JobRunner
             // 2. メディアの解決（トランザクションの外）
             [$mediaIds, $newFlags, $metas] = $this->resolveMedia($job, $item, $converter, $candidate);
 
-            // 3. 変換（トランザクション内で再照合）
-            $this->db->begin();
-            try {
-                // 再照合から書き込みまでの間に他のリクエストが同じ行を書き換えないよう、先に行ロックを取る
-                $converter->lock($item->locator, $job->options);
-                $again = $converter->snapshot($item->locator, $job->options);
-                if ($again === null || !Snapshot::equals($again, $item->before)) {
-                    $this->db->rollBack();
-                    return $this->fail($item, ItemStatus::Skipped, ReasonCode::StaleSnapshot);
-                }
-                // メディア解決に時間がかかった間にロックされた場合に備え、書き込み直前にも確認する
-                if ($this->lockGuard->isLocked($item->locator)) {
-                    $this->db->rollBack();
-                    return $this->fail($item, ItemStatus::Skipped, ReasonCode::EntryLocked);
-                }
-                $after = $converter->apply($candidate, $mediaIds, $job->options);
-                $warning = $this->altMismatch($item, $mediaIds, $newFlags, $metas);
-                $this->items->markConverted($item->id, $mediaIds, $after, $warning, $warning?->label());
-                $this->db->commit();
-            } catch (\Throwable $e) {
-                $this->db->rollBack();
-                throw $e;
-            }
+            // 3. 変換（エントリー単位のロックの中で、トランザクション内で再照合）
+            $warning = $this->entries->run(
+                $this->lockGuard->entryIdOf($item->locator),
+                fn (): ?ReasonCode => $this->convertInTransaction($job, $item, $converter, $candidate, $mediaIds, $newFlags, $metas),
+            );
             $this->cache->collect($item->locator, $item->blogId);
 
             return ['status' => 'converted', 'reason' => $warning === null ? '' : $warning->value, 'message' => $warning === null ? '' : $warning->label()];
@@ -208,8 +217,44 @@ class JobRunner
             return $this->fail($item, ItemStatus::Skipped, $e->reason, $e->getMessage());
         } catch (ConversionSkipException $e) {
             return $this->fail($item, ItemStatus::Skipped, $e->reason, $e->getMessage());
+        } catch (EntryBusyException) {
+            return $this->fail($item, ItemStatus::Skipped, ReasonCode::EntryLocked);
         } catch (\Throwable $e) {
-            return $this->fail($item, ItemStatus::Error, ReasonCode::UnknownError, $e->getMessage());
+            return $this->fail($item, ItemStatus::Error, ReasonCode::UnknownError, ErrorMessage::of($e, '変換でエラーになりました（アイテム ' . $item->id . '）'));
+        }
+    }
+
+    /**
+     * 行ロックを取り、再照合してから変換し、記録する（1 つのトランザクション）。
+     *
+     * @param list<int> $mediaIds
+     * @param list<bool> $newFlags
+     * @param list<\Acms\Plugins\ArchivesToMedia\Services\Media\MediaMeta> $metas
+     * @return ReasonCode|null 警告（再利用したメディアの alt が違うなど）
+     * @throws ConversionSkipException 再照合で食い違った・編集ロックされた
+     */
+    private function convertInTransaction(Job $job, Item $item, ConverterInterface $converter, Candidate $candidate, array $mediaIds, array $newFlags, array $metas): ?ReasonCode
+    {
+        $this->db->begin();
+        try {
+            // 再照合から書き込みまでの間に他のリクエストが同じ行を書き換えないよう、先に行ロックを取る
+            $converter->lock($item->locator, $job->options);
+            $again = $converter->snapshot($item->locator, $job->options);
+            if ($again === null || !Snapshot::equals($again, $item->before ?? [])) {
+                throw new ConversionSkipException(ReasonCode::StaleSnapshot);
+            }
+            // メディア解決に時間がかかった間にロックされた場合に備え、書き込み直前にも確認する
+            if ($this->lockGuard->isLocked($item->locator)) {
+                throw new ConversionSkipException(ReasonCode::EntryLocked);
+            }
+            $after = $converter->apply($candidate, $mediaIds, $job->options);
+            $warning = $this->mediaWarning($item, $mediaIds, $newFlags, $metas);
+            $this->items->markConverted($item->id, $mediaIds, $after, $warning, $warning?->label());
+            $this->db->commit();
+            return $warning;
+        } catch (\Throwable $e) {
+            $this->db->rollBack();
+            throw $e;
         }
     }
 
@@ -249,28 +294,34 @@ class JobRunner
     }
 
     /**
-     * 再利用した既存メディアの alt が、元のフィールドの alt と違えば警告（値は書き換えない）
+     * 再利用した既存メディアについての警告（値は書き換えない）。別のブログのメディアなら MEDIA_OTHER_BLOG、
+     * 元のフィールドの alt と違えば ALT_MISMATCH。
      *
      * @param list<int> $mediaIds
      * @param list<bool> $newFlags
      * @param list<\Acms\Plugins\ArchivesToMedia\Services\Media\MediaMeta> $metas
      */
-    private function altMismatch(Item $item, array $mediaIds, array $newFlags, array $metas): ?ReasonCode
+    private function mediaWarning(Item $item, array $mediaIds, array $newFlags, array $metas): ?ReasonCode
     {
-        if (!$item->target->isField()) {
-            return null;
-        }
+        $mismatch = false;
         foreach ($mediaIds as $i => $mediaId) {
-            $alt = $metas[$i]->alt ?? '';
-            if ($mediaId <= 0 || ($newFlags[$i] ?? true) || $alt === '') {
+            if ($mediaId <= 0 || ($newFlags[$i] ?? true)) {
                 continue;
             }
-            $current = Cast::str($this->db->one('SELECT media_field_3 FROM ' . $this->db->t('media') . ' WHERE media_id = ?', [$mediaId]));
-            if ($current !== $alt) {
-                return ReasonCode::AltMismatch;
+            // コアの重複検出は実行ブログ（BID）から選べる範囲で探すので、データの所有ブログと違うメディアを返すことがある
+            $row = $this->db->row('SELECT media_blog_id, media_field_3 FROM ' . $this->db->t('media') . ' WHERE media_id = ?', [$mediaId]);
+            if ($row === null) {
+                continue;
+            }
+            if (Cast::int($row['media_blog_id']) !== $item->blogId) {
+                return ReasonCode::MediaOtherBlog;
+            }
+            $alt = $metas[$i]->alt ?? '';
+            if ($item->target->isField() && $alt !== '' && Cast::str($row['media_field_3']) !== $alt) {
+                $mismatch = true;
             }
         }
-        return null;
+        return $mismatch ? ReasonCode::AltMismatch : null;
     }
 
     /**

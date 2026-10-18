@@ -207,6 +207,222 @@ final class ScanCoordinatorTest extends A2mTestCase
     }
 
     #[Test]
+    public function 時間の予算を超えたら_小さな単位で区切って返し_続きから取りこぼさず再開できる(): void
+    {
+        for ($i = 1; $i <= 12; $i++) {
+            $this->archives->put("001/{$i}.jpg", 'D' . $i);
+            $this->insertColumn(sprintf('t%02d', $i), 'image', ['column_field_2' => "001/{$i}.jpg"]);
+        }
+        $jobId = $this->newJob(['chunkSize' => 100]);
+
+        $job = $this->jobs()->find($jobId);
+        $this->assertNotNull($job);
+        $first = $this->coordinator()->scanChunk($job, 0.0);
+        $this->assertFalse($first['done']);
+        $this->assertLessThanOrEqual(5, $first['scanned'], '予算が尽きたら、chunkSize 件を待たずに返す');
+
+        for ($i = 0; $i < 20 && !($res['done'] ?? false); $i++) {
+            $job = $this->jobs()->find($jobId);
+            $this->assertNotNull($job);
+            $res = $this->coordinator()->scanChunk($job, 0.0);
+        }
+        $this->assertTrue($res['done'] ?? false);
+        $this->assertSame(12, $this->items()->countByStatus($jobId)[ItemStatus::Pending->value] ?? 0);
+    }
+
+    #[Test]
+    public function 記録できない巨大な値があっても_スキャンは止まらずエラーのアイテムとして残す(): void
+    {
+        $this->insertColumn('big', 'image', ['column_field_2' => str_repeat('x', 70000)]);
+        $this->insertColumn('ok', 'image', ['column_field_2' => '001/a.jpg']);
+        $this->archives->put('001/a.jpg', 'A');
+        $jobId = $this->newJob();
+
+        $res = $this->scanAll($jobId);
+
+        $this->assertTrue($res['done']);
+        $counts = $this->items()->countByStatus($jobId);
+        $this->assertSame(['error' => 1, 'pending' => 1], $counts);
+    }
+
+    #[Test]
+    public function 再スキャンは_読み込んだあとに実行が始まっていたら_アイテムを消さずに拒否する(): void
+    {
+        $this->seedMixed();
+        $jobId = $this->newJob(['chunkSize' => 50]);
+        $this->scanAll($jobId);
+        $stale = $this->jobs()->find($jobId);
+        $this->assertNotNull($stale);
+        $before = $this->items()->countByStatus($jobId);
+        $this->db->exec('UPDATE ' . $this->db->t('a2m_job') . ' SET job_status = ? WHERE job_id = ?', ['running', $jobId]);
+
+        try {
+            $this->coordinator()->reset($stale);
+            $this->fail('拒否されるはず');
+        } catch (\Acms\Plugins\ArchivesToMedia\Services\Support\StateException) {
+            $this->assertSame($before, $this->items()->countByStatus($jobId), 'アイテムは消えない');
+            $this->assertSame(JobStatus::Running, $this->jobs()->find($jobId)?->status);
+        }
+    }
+
+    #[Test]
+    public function スキャンは_読み込んだあとに実行が始まっていたら_状態を上書きせずに拒否する(): void
+    {
+        $this->seedMixed();
+        $jobId = $this->newJob(['chunkSize' => 50]);
+        $this->scanAll($jobId);
+        $stale = $this->jobs()->find($jobId);
+        $this->assertNotNull($stale);
+        $this->assertSame(JobStatus::Scanned, $stale->status);
+        $this->db->exec('UPDATE ' . $this->db->t('a2m_job') . ' SET job_status = ? WHERE job_id = ?', ['running', $jobId]);
+
+        try {
+            $this->coordinator()->scanChunk($stale);
+            $this->fail('拒否されるはず');
+        } catch (\Acms\Plugins\ArchivesToMedia\Services\Support\StateException) {
+            $this->assertSame(JobStatus::Running, $this->jobs()->find($jobId)?->status);
+        }
+    }
+
+    #[Test]
+    public function 候補が見つからないまま歩いている間も_時間の予算を守って区切って返す(): void
+    {
+        for ($i = 1; $i <= 45; $i++) {
+            $eid = $this->createTestEntry($this->blogId, null);
+            $this->insertFileField('doc', "f/{$i}.pdf", "{$i}.pdf", '', 1, ['field_eid' => $eid]);
+        }
+        $jobId = $this->newJob(['targets' => ['field_image'], 'chunkSize' => 100]);
+
+        $job = $this->jobs()->find($jobId);
+        $this->assertNotNull($job);
+        $first = $this->coordinator()->scanChunk($job, 0.0);
+
+        $this->assertFalse($first['done'], '1 回で 45 所属を歩き切らない');
+        $this->assertSame(0, $first['scanned']);
+        $res = $this->scanAll($jobId);
+        $this->assertTrue($res['done']);
+        $this->assertSame([], $this->items()->countByStatus($jobId));
+    }
+
+    #[Test]
+    public function 予算が尽きたあとの候補は_ファイル全体のハッシュ計算を後回しにして登録する(): void
+    {
+        $this->archives->put('g/0.jpg', 'X0');
+        for ($i = 1; $i <= 30; $i++) {
+            $this->archives->put("g/{$i}.jpg", 'X' . $i);
+            $this->insertImageField('gallery', "g/{$i}.jpg", $i);
+        }
+        $jobId = $this->newJob(['targets' => ['field_image'], 'chunkSize' => 100]);
+        $job = $this->jobs()->find($jobId);
+        $this->assertNotNull($job);
+
+        $res = $this->coordinator()->scanChunk($job, 0.0);
+
+        $this->assertSame(30, $this->items()->countByStatus($jobId)['pending'] ?? 0, '候補は取りこぼさず全部登録する');
+        $this->assertLessThan(30, $this->media->previewCalls, 'ハッシュ計算（見込みの判定）は予算の範囲だけ');
+        $previews = array_unique(array_map(static fn (array $r): string => Cast::str($r['preview']), $this->items()->summary($jobId)));
+        $this->assertContains('unknown', $previews);
+        $this->assertFalse($res['done'], '続きの位置がまだある');
+        $this->scanAll($jobId);
+        $this->assertSame(30, $this->items()->countByStatus($jobId)['pending'] ?? 0, '続きを読んでも重複しない');
+        // 見込みが未判定でも、実行すれば普通に変換できる
+        $converted = 0;
+        for ($i = 0; $i < 5; $i++) {
+            $chunk = $this->runner()->runChunk($this->jobs()->find($jobId) ?? $job, 600.0);
+            $converted += $chunk->converted;
+            if ($chunk->done) {
+                break;
+            }
+        }
+        $this->assertSame(30, $converted);
+    }
+
+    #[Test]
+    public function エラーのアイテムすら記録できない候補があっても_スキャンは止まらず先へ進む(): void
+    {
+        $this->insertColumn('poison', 'image', ['column_field_2' => '001/a.jpg']);
+        $this->insertColumn('fine', 'image', ['column_field_2' => '001/b.jpg']);
+        $this->archives->put('001/a.jpg', 'A');
+        $this->archives->put('001/b.jpg', 'B');
+        // 所属 ID が列の長さを超える候補（記録しようとすると必ず失敗する）を返すスキャナ
+        $scanner = new class implements \Acms\Plugins\ArchivesToMedia\Services\Scanner\ScannerInterface {
+            public function target(): \Acms\Plugins\ArchivesToMedia\Services\Domain\TargetType
+            {
+                return \Acms\Plugins\ArchivesToMedia\Services\Domain\TargetType::UnitImage;
+            }
+
+            public function scan(JobOptions $options, int $blogId, ?string $cursor, int $limit): array
+            {
+                if ($cursor !== null) {
+                    return ['candidates' => [], 'nextCursor' => null];
+                }
+                $mk = static fn (string $id, string $path, string $owner): \Acms\Plugins\ArchivesToMedia\Services\Domain\Candidate => new \Acms\Plugins\ArchivesToMedia\Services\Domain\Candidate(
+                    \Acms\Plugins\ArchivesToMedia\Services\Domain\TargetType::UnitImage,
+                    new \Acms\Plugins\ArchivesToMedia\Services\Domain\Locator\ColumnLocator($id),
+                    'entry',
+                    $owner,
+                    $blogId,
+                    [$path],
+                );
+                return ['candidates' => [$mk('poison', '001/a.jpg', str_repeat('9', 40)), $mk('fine', '001/b.jpg', '1')], 'nextCursor' => 'more'];
+            }
+        };
+        $coordinator = new ScanCoordinator([$scanner], [$this->unitImageConverter()], $this->resolver(), $this->items(), $this->jobs());
+        $jobId = $this->newJob(['targets' => ['unit_image'], 'chunkSize' => 10]);
+        $job = $this->jobs()->find($jobId);
+        $this->assertNotNull($job);
+
+        $coordinator->scanChunk($job);
+
+        $this->assertSame(['pending' => 1], $this->items()->countByStatus($jobId), '記録できない候補は飛ばし、ほかは登録する');
+    }
+
+    #[Test]
+    public function 再スキャンのアイテム削除が途中で止まっても_古いカーソルを残さない(): void
+    {
+        $this->seedMixed();
+        $jobId = $this->newJob(['chunkSize' => 2]);
+        $job = $this->jobs()->find($jobId);
+        $this->assertNotNull($job);
+        $this->coordinator()->scanChunk($job); // 途中（カーソルが進んだ状態）
+        $job = $this->jobs()->find($jobId);
+        $this->assertNotNull($job);
+        $this->assertNotNull($job->scanCursor);
+        $items = new class ($this->db) extends \Acms\Plugins\ArchivesToMedia\Services\Repository\ItemRepository {
+            public function deleteByJob(int $jobId, float $timeBudget = 15.0, int $batch = 5000): bool
+            {
+                return false; // 時間切れで途中までしか消せなかった想定
+            }
+        };
+        $coordinator = new ScanCoordinator([], [], $this->resolver(), $items, $this->jobs());
+
+        try {
+            $coordinator->reset($job);
+            $this->fail('例外が必要');
+        } catch (\Acms\Plugins\ArchivesToMedia\Services\Support\StateException) {
+            $after = $this->jobs()->find($jobId);
+            $this->assertNull($after?->scanCursor, 'カーソルを残すと、再開したときに消えた分の候補を取りこぼす');
+        }
+    }
+
+    #[Test]
+    public function 複数パスのうち判定を後回しにしたものがあれば_全体を未判定にする(): void
+    {
+        $this->archives->put('m/a.jpg', 'A');
+        $this->archives->put('m/b.jpg', 'B');
+        $this->insertColumn('ml', 'image', ['column_field_2' => 'm/a.jpg:acms_unit_delimiter:m/b.jpg']);
+        (new \Acms\Plugins\ArchivesToMedia\Services\Repository\PathMapRepository($this->db))->save($this->blogId, 'm/a.jpg', \Acms\TestingFramework\Seeder\MediaSeeder::seed($this->blogId), null);
+        $jobId = $this->newJob(['targets' => ['unit_image'], 'chunkSize' => 10]);
+        $job = $this->jobs()->find($jobId);
+        $this->assertNotNull($job);
+
+        $this->coordinator()->scanChunk($job, 0.0);
+
+        $summary = $this->items()->summary($jobId);
+        $this->assertSame(['unknown'], array_map(static fn (array $r): string => Cast::str($r['preview']), $summary), 'reuse と unknown を mixed にしない');
+    }
+
+    #[Test]
     public function 空のサイトでも完了する(): void
     {
         $jobId = $this->newJob();

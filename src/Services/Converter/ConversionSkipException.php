@@ -9,7 +9,7 @@ use Acms\Plugins\ArchivesToMedia\Services\Domain\ReasonCode;
 /**
  * 変換せずにスキップすべきことを、理由コード付きで表す
  */
-final class ConversionSkipException extends \RuntimeException
+final class ConversionSkipException extends \RuntimeException implements \Acms\Plugins\ArchivesToMedia\Services\Support\PublicMessage
 {
     public function __construct(public readonly ReasonCode $reason, string $message = '')
     {

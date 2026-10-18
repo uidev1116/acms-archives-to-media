@@ -119,6 +119,24 @@ final class JobOptionsTest extends TestCase
     }
 
     #[Test]
+    public function カスタム名が元と同じ名前なのは_新しく作る入力では拒否し_保存済みのジョブの読み込みは妨げない(): void
+    {
+        $data = ['field' => ['mode' => 'custom', 'custom' => ['hero' => 'hero']]];
+
+        try {
+            JobOptions::fromArray($data, true);
+            $this->fail('厳しい検証では拒否されるはず');
+        } catch (\InvalidArgumentException) {
+            $this->addToAssertionCount(1);
+        }
+        // 使われないモード（custom 以外）に残っている入力のために、拒否しない
+        JobOptions::fromArray(['field' => ['mode' => 'suffix', 'custom' => ['hero' => 'hero']]], true); // 例外にならない
+        $this->addToAssertionCount(1);
+        // この検証を入れる前に作られたジョブも、一覧や取得で読めなければならない
+        $this->assertSame('hero', JobOptions::fromJson((string) json_encode($data))->fieldCustom['hero']);
+    }
+
+    #[Test]
     public function 重複する対象は1つにまとめる(): void
     {
         $o = JobOptions::fromArray(['targets' => ['unit_image', 'unit_image'], 'owners' => ['entry', 'entry']]);

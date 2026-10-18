@@ -118,6 +118,37 @@ class Db
     }
 
     /**
+     * MySQL の名前付きロック（GET_LOCK）の名前。サーバー全体で共有されるので、DB 名とテーブル接頭辞を含めて
+     * 同じサーバーの別のインストールと衝突しないようにする（名前は 64 文字以内）。
+     */
+    public static function advisoryLockName(string $key): string
+    {
+        $dbName = defined('DB_NAME') ? constant('DB_NAME') : '';
+        return 'a2m_' . sha1(Cast::str($dbName) . '|' . DB_PREFIX . '|' . $key);
+    }
+
+    /**
+     * 名前付きロックを取って $fn を実行し、終わったら解放する。取れなければ null を返す（$fn は呼ばない）。
+     *
+     * @template T
+     * @param \Closure(): T $fn
+     * @return array{0: T}|null 取れなかったら null、取れて実行したら [戻り値]
+     */
+    public function withAdvisoryLock(string $key, int $timeoutSeconds, \Closure $fn): ?array
+    {
+        $name = self::advisoryLockName($key);
+        // 1: 取れた / 0: 時間切れ / NULL: エラー
+        if (Cast::int($this->one('SELECT GET_LOCK(?, ?)', [$name, $timeoutSeconds])) !== 1) {
+            return null;
+        }
+        try {
+            return [$fn()];
+        } finally {
+            $this->one('SELECT RELEASE_LOCK(?)', [$name]);
+        }
+    }
+
+    /**
      * LIKE のワイルドカードをエスケープする
      */
     public function escapeLike(string $value): string

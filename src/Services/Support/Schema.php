@@ -45,7 +45,7 @@ final class Schema
             `item_owner_id` varchar(36) NOT NULL DEFAULT \'\',
             `item_source_paths` text NOT NULL,
             `item_preview` varchar(16) NOT NULL DEFAULT \'\',
-            `item_media_ids` varchar(255) NOT NULL DEFAULT \'\',
+            `item_media_ids` text NOT NULL,
             `item_status` varchar(16) NOT NULL DEFAULT \'pending\',
             `item_reason` varchar(32) NOT NULL DEFAULT \'\',
             `item_message` text DEFAULT NULL,
@@ -57,7 +57,9 @@ final class Schema
             PRIMARY KEY (`item_id`),
             UNIQUE KEY `job_locator` (`item_job_id`, `item_locator_hash`),
             KEY `job_status` (`item_job_id`, `item_status`),
-            KEY `job_target` (`item_job_id`, `item_target`)
+            KEY `job_target` (`item_job_id`, `item_target`),
+            KEY `job_item` (`item_job_id`, `item_id`),
+            KEY `job_summary` (`item_job_id`, `item_target`, `item_status`, `item_preview`, `item_reason`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci');
 
         $this->db->exec('CREATE TABLE IF NOT EXISTS ' . $this->db->t('a2m_path_map') . ' (
@@ -82,6 +84,8 @@ final class Schema
      *   sha1 のハッシュ列に張る（古い MySQL のキー長制限を避ける）。
      * - スキャンのカーソルは長くなりうるので text。
      * - クリーンアップで消した旧キーの行を item_cleanup に控え、ロールバックで戻せるようにする。
+     * - アイテムを item_id 順に読む（CSV など）ためのインデックスと、メディア ID の列の型（text）。
+     * - 種類別の集計（summary）を、テーブルを読まずにインデックスだけで行えるようにする。
      */
     private function migrate(): void
     {
@@ -98,6 +102,16 @@ final class Schema
         }
         $this->db->exec('ALTER TABLE ' . $this->db->t($path) . ' MODIFY `map_source_path` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL');
         $this->db->exec('ALTER TABLE ' . $this->db->t('a2m_job') . ' MODIFY `job_scan_cursor` text DEFAULT NULL');
+        if (!$this->indexExists('a2m_item', 'job_item')) {
+            $this->db->exec('ALTER TABLE ' . $this->db->t('a2m_item') . ' ADD KEY `job_item` (`item_job_id`, `item_id`)');
+        }
+        // 画像ユニットの多言語などでメディア ID が多いと、varchar(255) では黙って切り詰められる
+        if (Cast::str($this->db->one('SELECT DATA_TYPE FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?', [DB_PREFIX . 'a2m_item', 'item_media_ids'])) === 'varchar') {
+            $this->db->exec('ALTER TABLE ' . $this->db->t('a2m_item') . ' MODIFY `item_media_ids` text NOT NULL');
+        }
+        if (!$this->indexExists('a2m_item', 'job_summary')) {
+            $this->db->exec('ALTER TABLE ' . $this->db->t('a2m_item') . ' ADD KEY `job_summary` (`item_job_id`, `item_target`, `item_status`, `item_preview`, `item_reason`)');
+        }
         if (!$this->columnExists('a2m_item', 'item_cleanup')) {
             $this->db->exec('ALTER TABLE ' . $this->db->t('a2m_item') . ' ADD COLUMN `item_cleanup` longtext DEFAULT NULL AFTER `item_after`');
         }
@@ -131,7 +145,11 @@ final class Schema
         if ($exists === 0) {
             return 0;
         }
-        return Cast::int($this->db->one('SELECT COUNT(*) FROM ' . $this->db->t('a2m_item') . ' WHERE item_status = \'converted\''));
+        // 確定済みのジョブは、スナップショットを捨てていてロールバックできないので数えない
+        return Cast::int($this->db->one(
+            'SELECT COUNT(*) FROM ' . $this->db->t('a2m_item') . ' i LEFT JOIN ' . $this->db->t('a2m_job') . ' j ON j.job_id = i.item_job_id'
+            . ' WHERE i.item_status = \'converted\' AND (j.job_status IS NULL OR j.job_status <> \'finalized\')'
+        ));
     }
 
     /**

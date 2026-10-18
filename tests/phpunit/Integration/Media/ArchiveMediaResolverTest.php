@@ -246,6 +246,45 @@ final class ArchiveMediaResolverTest extends A2mTestCase
     }
 
     #[Test]
+    public function 新規登録は名前付きロックの中で行い_別の処理が持っていれば登録せずに失敗する(): void
+    {
+        $this->archives->put('001/a.jpg', 'AAA');
+        $env = static function (string $key, string $default): string {
+            $value = getenv($key);
+            return is_string($value) && $value !== '' ? $value : $default;
+        };
+        $other = new \PDO(
+            'mysql:host=' . $env('ACMS_DB_HOST', 'db') . ';dbname=' . $env('ACMS_DB_NAME', ''),
+            $env('ACMS_DB_USER', 'root'),
+            $env('ACMS_DB_PASS', ''),
+        );
+        $name = \Acms\Plugins\ArchivesToMedia\Services\Support\Db::advisoryLockName('media-register');
+        $other->query("SELECT GET_LOCK('" . $name . "', 1)");
+        $importer = new \Acms\Services\Media\MediaSourceImporter(new \Acms\Services\Storage\Filesystem(), $this->media, $this->archives->dir, 1048576);
+        $resolver = new ArchiveMediaResolver(
+            $importer,
+            $this->media,
+            new PathMapRepository($this->db),
+            $this->selector(),
+            new \Acms\Plugins\ArchivesToMedia\Services\Media\BlogOwnershipFixer($this->db),
+            new \Acms\Plugins\ArchivesToMedia\Services\Media\MediaMetaWriter($this->db, $this->media),
+            $this->archives->dir,
+            1048576,
+            $this->db,
+            1,
+        );
+        try {
+            $this->assertSame(ReasonCode::MediaRegisterFailed, $this->reasonOf(fn () => $resolver->resolve('001/a.jpg', $this->blogId, 1, new MediaMeta())));
+            $this->assertSame([], $this->media->registered, 'ロックを取れなければ登録しない');
+        } finally {
+            $other->query("SELECT RELEASE_LOCK('" . $name . "')");
+        }
+
+        $res = $resolver->resolve('001/a.jpg', $this->blogId, 1, new MediaMeta());
+        $this->assertTrue($res->isNew);
+    }
+
+    #[Test]
     public function ブロックエディターのdata_midによる参照も見つける(): void
     {
         $checker = new MediaReferenceChecker($this->db);

@@ -18,6 +18,7 @@ enum ReasonCode: string
     case MediaRegisterFailed = 'MEDIA_REGISTER_FAILED';
     case RollbackConflict = 'ROLLBACK_CONFLICT';
     case AltMismatch = 'ALT_MISMATCH';
+    case MediaOtherBlog = 'MEDIA_OTHER_BLOG';
     case CleanupBlocked = 'CLEANUP_BLOCKED';
     case UnknownError = 'UNKNOWN_ERROR';
 
@@ -36,6 +37,7 @@ enum ReasonCode: string
             self::MediaRegisterFailed => 'メディア登録に失敗しました',
             self::RollbackConflict => '変換後に編集されたため戻せません',
             self::AltMismatch => '再利用メディアの alt と一致しません',
+            self::MediaOtherBlog => '別のブログのメディアを再利用しました',
             self::CleanupBlocked => '新しいフィールドが無いため、旧データを消せません',
             self::UnknownError => '予期しないエラー',
         };

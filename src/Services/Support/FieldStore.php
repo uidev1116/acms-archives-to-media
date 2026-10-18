@@ -54,6 +54,18 @@ class FieldStore
     }
 
     /**
+     * 同じ所属に、指定した sort 以外の $key の行があるか（フィールドが複数回繰り返されているとき、他の繰り返しが残っているか）
+     */
+    public function existsInOtherSort(FieldLocator $locator, string $key): bool
+    {
+        [$owner, $params] = $this->ownerWhere($locator);
+        return $this->db->row(
+            'SELECT 1 FROM ' . $this->db->t($locator->table()) . ' WHERE ' . $owner . ' AND field_sort <> ? AND BINARY field_key = BINARY ?',
+            [...$params, $locator->sort, $key]
+        ) !== null;
+    }
+
+    /**
      * @param list<array<string, mixed>> $rows
      * @return list<array<string, mixed>>
      */

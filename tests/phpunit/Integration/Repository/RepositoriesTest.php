@@ -15,6 +15,7 @@ use Acms\Plugins\ArchivesToMedia\Services\Domain\TargetType;
 use Acms\Plugins\ArchivesToMedia\Services\Repository\PathMapRepository;
 use Acms\Plugins\ArchivesToMedia\Tests\Support\A2mTestCase;
 use Acms\TestingFramework\Seeder\MediaSeeder;
+use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use PHPUnit\Framework\Attributes\Test;
 
 final class RepositoriesTest extends A2mTestCase
@@ -191,6 +192,99 @@ final class RepositoriesTest extends A2mTestCase
         $this->assertSame(2, $changed);
         $this->assertSame(['excluded' => 2, 'pending' => 1], $this->items()->countByStatus($jobId));
         $this->assertSame(2, $this->items()->setExcludedByFilter($jobId, ['target' => 'unit_image'], false));
+    }
+
+    #[Test]
+    public function 一覧の検索は_並べ替えに重い列を持ち込まず_合計が分かっていればCOUNTしない(): void
+    {
+        $jobId = $this->jobs()->create($this->blogId, 1, JobOptions::defaults());
+        foreach (['c1', 'c2', 'c3'] as $id) {
+            $this->items()->insert($jobId, $this->candidate($id, "001/{$id}.jpg"), 'new', []);
+        }
+        $db = new \Acms\Plugins\ArchivesToMedia\Tests\Support\RecordingDb();
+        $repo = new \Acms\Plugins\ArchivesToMedia\Services\Repository\ItemRepository($db);
+
+        $res = $repo->search($jobId, [], 'item_status', true, 1, 2, 3);
+
+        $this->assertSame(3, $res['total']);
+        $this->assertCount(2, $res['items']);
+        $this->assertSame(
+            ['SELECT item_id FROM'],
+            [substr($db->selects[0][0], 0, 19)],
+            '並べ替えと切り出しは item_id だけで行い、あとから行を読む'
+        );
+        foreach ($db->selects as [$sql]) {
+            $this->assertStringNotContainsString('COUNT(', $sql);
+        }
+        $this->assertCount(2, $db->selects);
+
+        // 絞り込みがあれば合計は数え直す
+        $db->selects = [['', []]];
+        $repo->search($jobId, ['status' => 'pending'], 'item_id', false, 1, 2, 3);
+        $this->assertStringContainsString('COUNT(', implode("\n", array_column($db->selects, 0)));
+    }
+
+    #[Test]
+    public function 重複は黙って無視するが_それ以外の書き込みエラーは握りつぶさず例外にする(): void
+    {
+        $jobId = $this->jobs()->create($this->blogId, 1, JobOptions::defaults());
+        $this->assertNotNull($this->items()->insert($jobId, $this->candidate('c1'), 'new', []));
+        $this->assertNull($this->items()->insert($jobId, $this->candidate('c1'), 'new', []), '同じ所在は重複');
+
+        // 列に入らない値（item_source_paths は text = 64KB まで）は、黙って捨てたり切り詰めたりしない
+        $huge = new Candidate(TargetType::UnitImage, new ColumnLocator('big'), 'entry', $this->entryId, $this->blogId, [str_repeat('x', 70000)]);
+        $this->expectException(\RuntimeException::class);
+        $this->items()->insert($jobId, $huge, 'new', []);
+    }
+
+    #[Test]
+    public function ジョブのアイテム削除は_件数と時間で区切って進められる(): void
+    {
+        $jobId = $this->jobs()->create($this->blogId, 1, JobOptions::defaults());
+        $other = $this->jobs()->create($this->blogId, 1, JobOptions::defaults());
+        foreach (['a', 'b', 'c', 'd', 'e'] as $id) {
+            $this->items()->insert($jobId, $this->candidate($id), 'new', []);
+        }
+        $this->items()->insert($other, $this->candidate('z'), 'new', []);
+
+        $this->assertFalse($this->items()->deleteByJob($jobId, 0.0, 2), '2 件だけ消して、続きがあると返す');
+        $this->assertSame(3, array_sum($this->items()->countByStatus($jobId)));
+        $this->assertFalse($this->items()->deleteByJob($jobId, 0.0, 2));
+        $this->assertTrue($this->items()->deleteByJob($jobId, 0.0, 2), '最後の 1 件を消して終わり');
+        $this->assertSame([], $this->items()->countByStatus($jobId));
+        $this->assertSame(1, array_sum($this->items()->countByStatus($other)), '他のジョブには触れない');
+    }
+
+    #[Test]
+    public function スナップショットの削除は_item_idの続きから進み_既に消した範囲を読み直さない(): void
+    {
+        $jobId = $this->jobs()->create($this->blogId, 1, JobOptions::defaults());
+        $ids = [];
+        foreach (['a', 'b', 'c', 'd', 'e'] as $id) {
+            $ids[] = (int) $this->items()->insert($jobId, $this->candidate($id), 'new', ['row' => ['x' => $id]]);
+        }
+        $first = $this->items()->purgeSnapshots($jobId, 0, 2);
+        $this->assertSame([$ids[1], 2], [$first['last'], $first['count']]);
+        $second = $this->items()->purgeSnapshots($jobId, $first['last'], 2);
+        $this->assertSame([$ids[3], 2], [$second['last'], $second['count']]);
+        $third = $this->items()->purgeSnapshots($jobId, $second['last'], 2);
+        $this->assertSame([$ids[4], 1], [$third['last'], $third['count']]);
+        $this->assertSame(0, $this->items()->purgeSnapshots($jobId, $third['last'], 2)['count']);
+        $left = $this->db->one('SELECT COUNT(*) FROM ' . $this->db->t('a2m_item') . ' WHERE item_job_id = ? AND item_before IS NOT NULL', [$jobId]);
+        $this->assertSame('0', Cast::str($left));
+    }
+
+    #[Test]
+    public function 記録できない長さのエラーは_利用者に見せてよい文言の例外になる(): void
+    {
+        $jobId = $this->jobs()->create($this->blogId, 1, JobOptions::defaults());
+        $huge = new Candidate(TargetType::UnitImage, new ColumnLocator('big'), 'entry', $this->entryId, $this->blogId, [str_repeat('x', 70000)]);
+        try {
+            $this->items()->insert($jobId, $huge, 'new', []);
+            $this->fail('例外が必要');
+        } catch (\RuntimeException $e) {
+            $this->assertSame($e->getMessage(), \Acms\Plugins\ArchivesToMedia\Services\Support\ErrorMessage::of($e));
+        }
     }
 
     #[Test]

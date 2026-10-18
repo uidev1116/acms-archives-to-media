@@ -29,6 +29,8 @@ export default defineConfig(({ command }) => ({
     setupFiles: ['frontend/test/setup.ts'],
     include: ['frontend/**/*.test.{ts,tsx}'],
     css: false,
+    // Modal や userEvent を多用するテストは、CI やカバレッジ計測中の負荷で既定の 5 秒を超えることがある
+    testTimeout: 20_000,
     coverage: {
       provider: 'v8',
       include: ['frontend/**/*.{ts,tsx}'],

@@ -6,6 +6,8 @@ namespace Acms\Plugins\ArchivesToMedia\Services\Media;
 
 use Acms\Plugins\ArchivesToMedia\Services\Domain\ReasonCode;
 use Acms\Plugins\ArchivesToMedia\Services\Repository\PathMapRepository;
+use Acms\Plugins\ArchivesToMedia\Services\Support\AuditLog;
+use Acms\Plugins\ArchivesToMedia\Services\Support\Db;
 use Acms\Services\Media\Exceptions\MediaSourceImportException;
 use Acms\Services\Media\Helper;
 use Acms\Services\Media\MediaImportPreview;
@@ -45,16 +47,21 @@ class ArchiveMediaResolver
         private readonly MediaMetaWriter $metaWriter,
         private readonly string $baseDir,
         private readonly int $maxFileSize,
+        private readonly ?Db $db = null,
+        private readonly int $lockTimeout = 10,
     ) {
     }
 
     /**
      * 登録せずに、新規登録か再利用かの見込みを返す（ドライラン）。
      *
-     * @return 'new'|'reuse'
+     * ファイルの存在・場所・サイズの確認は必ず行うが、新規か再利用かの判定にはファイル全体のハッシュ計算が要るので、
+     * $hash が false のときは行わず 'unknown'（実行時に判定する）を返す。
+     *
+     * @return 'new'|'reuse'|'unknown'
      * @throws SourceException
      */
-    public function preview(string $archivesPath, int $ownerBlogId, bool $preferLarge = true): string
+    public function preview(string $archivesPath, int $ownerBlogId, bool $preferLarge = true, bool $hash = true): string
     {
         $normalized = $this->selector->normalize($archivesPath, $preferLarge);
         if ($this->pathMap->find($ownerBlogId, $normalized) !== null) {
@@ -62,6 +69,9 @@ class ArchiveMediaResolver
         }
         $source = $this->selector->selectImport($normalized, $preferLarge);
         $this->precheck($source);
+        if (!$hash) {
+            return 'unknown';
+        }
         return $this->dryRun($source)->isDuplicate() ? 'reuse' : 'new';
     }
 
@@ -77,35 +87,47 @@ class ArchiveMediaResolver
             return new ResolvedMedia($mapped, false);
         }
 
-        $source = $this->selector->selectImport($normalized, $meta->preferLarge);
-        $this->precheck($source);
-        $preview = $this->dryRun($source);
+        $register = function () use ($normalized, $ownerBlogId, $jobId, $meta): ResolvedMedia {
+            $source = $this->selector->selectImport($normalized, $meta->preferLarge);
+            $this->precheck($source);
+            $preview = $this->dryRun($source);
 
-        if ($preview->isDuplicate() && $preview->reusedMediaId() !== null) {
-            $mediaId = $preview->reusedMediaId();
-            $this->pathMap->save($ownerBlogId, $normalized, $mediaId, null);
-            return new ResolvedMedia($mediaId, false);
-        }
-
-        $mediaId = $this->register($source, $this->selector->fileName($normalized, $meta->fileName));
-        // 所属ブログの補正とメタデータの書き込みを済ませてから、最後に対応表へ記録する。
-        // 先に記録すると、補正の途中で失敗したときに、次回は「対応表にあるから」と補正が二度と行われない。
-        try {
-            $this->ownership->fix($mediaId, $ownerBlogId);
-            $this->metaWriter->write($mediaId, $ownerBlogId, $meta);
-            $this->pathMap->save($ownerBlogId, $normalized, $mediaId, $jobId);
-        } catch (\Throwable $e) {
-            // 半端な状態（所属ブログ・alt・タグが未設定）のメディアを残すと、次回は重複として再利用されて補正されない。
-            // 登録したメディアは削除して、次の実行でやり直す（削除できなければ孤立メディアが残るだけで、データは壊れない）。
-            try {
-                $this->media->deleteItem($mediaId);
-            } catch (\Throwable) {
-                // 削除に失敗しても、元の例外を優先する
+            if ($preview->isDuplicate() && $preview->reusedMediaId() !== null) {
+                $mediaId = $preview->reusedMediaId();
+                $this->pathMap->save($ownerBlogId, $normalized, $mediaId, null);
+                return new ResolvedMedia($mediaId, false);
             }
-            throw $e;
-        }
 
-        return new ResolvedMedia($mediaId, true);
+            $mediaId = $this->register($source, $this->selector->fileName($normalized, $meta->fileName));
+            // 所属ブログの補正とメタデータの書き込みを済ませてから、最後に対応表へ記録する。
+            // 先に記録すると、補正の途中で失敗したときに、次回は「対応表にあるから」と補正が二度と行われない。
+            try {
+                $this->ownership->fix($mediaId, $ownerBlogId);
+                $this->metaWriter->write($mediaId, $ownerBlogId, $meta);
+                $this->pathMap->save($ownerBlogId, $normalized, $mediaId, $jobId);
+            } catch (\Throwable $e) {
+                // 半端な状態（所属ブログ・alt・タグが未設定）のメディアを残すと、次回は重複として再利用されて補正されない。
+                // 登録したメディアは削除して、次の実行でやり直す（削除できなければ孤立メディアが残るだけで、データは壊れない）。
+                try {
+                    $this->media->deleteItem($mediaId);
+                } catch (\Throwable) {
+                    // 削除に失敗しても、元の例外を優先する
+                }
+                throw $e;
+            }
+
+            return new ResolvedMedia($mediaId, true);
+        };
+        if ($this->db === null) {
+            return $register();
+        }
+        // 判定（重複の確認）から登録までの間に、別のブログで動く同じ処理が同じ内容を登録すると、
+        // コアは既存のメディアを返すだけなのに、こちらは新規作成したと誤解してしまう。判定から登録までを直列化する。
+        $locked = $this->db->withAdvisoryLock('media-register', $this->lockTimeout, $register);
+        if ($locked === null) {
+            throw new SourceException(ReasonCode::MediaRegisterFailed, '別の処理がメディアを登録中です。しばらくしてから再実行してください。');
+        }
+        return $locked[0];
     }
 
     /**
@@ -176,6 +198,9 @@ class ArchiveMediaResolver
 
     private function translate(\Throwable $e): SourceException
     {
-        return new SourceException(self::reasonFor($e->getMessage()), $e->getMessage(), $e);
+        // コアの文言には、サーバーのパスなどが含まれうる。画面には理由コードの文言だけを出し、詳細は監査ログに残す
+        $reason = self::reasonFor($e->getMessage());
+        (new AuditLog())->notice('メディアの取り込みに失敗しました', ['reason' => $reason->value, 'error' => $e->getMessage()]);
+        return new SourceException($reason, '', $e);
     }
 }

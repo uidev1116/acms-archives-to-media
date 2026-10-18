@@ -172,6 +172,17 @@ type が `file` のメディアは非公開領域の `MEDIA_STORAGE_DIR` に保�
 | スキャンした後にデータが変わった | スキップ | `STALE_SNAPSHOT` |
 | `{dest}` が既に存在する（値が違う） | スキップ | `DEST_CONFLICT` |
 | 多言語ユニットで一部の言語のパスだけ失敗した | そのユニット全体をスキップ（一部だけ変換しない） | `PARTIAL_SOURCE` |
+| エントリーが別の処理（保存・リビジョン切り替え）で更新中でロックを取れない（§12） | スキップ（後で再実行） | `ENTRY_LOCKED` |
+| メディア登録を別の処理が実行中で、名前付きロックを取れない | スキップ（後で再実行） | `MEDIA_REGISTER_FAILED` |
+
+変換はできたが、確認してほしいものは警告として `item_reason` に残す（アイテムは `converted` のまま）。
+
+| 状況 | 理由コード |
+|---|---|
+| 再利用したメディアの alt が、元のフィールドの alt と違う（値は書き換えない） | `ALT_MISMATCH` |
+| 再利用したメディアが、データの所有ブログと別のブログのもの（コアの重複検出は実行ブログから選べる範囲で探すため） | `MEDIA_OTHER_BLOG` |
+
+ロールバックとクリーンアップでは、`ROLLBACK_CONFLICT`（変換後に編集されて戻せない）、`CLEANUP_BLOCKED`（新しいフィールドが無いため旧データを消せない）を使う。
 
 ## 5. 処理フロー
 
@@ -185,6 +196,8 @@ draft ──scan──▶ scanning ──▶ scanned ──run──▶ running 
                    └──▶ failed ◀────────────────┤
                                                 ▼
                                             completed ──rollback──▶ rolling_back ──▶ rolled_back
+                                                │
+                                                └──finalize──▶ finalized（スナップショットを捨てる。ロールバック不可）
 
 ```
 
@@ -194,7 +207,9 @@ draft ──scan──▶ scanning ──▶ scanned ──run──▶ running 
 
 ```
 JobRunner::runChunk(job)
+  └ （開始時）JobRepository::transition(…→running)  … 読み込み後に状態が変わっていれば StateException
   └ for item in ItemRepository::nextPending(job, 20)
+      ├ EntrySerializer::run(eid)         … コアの UnitLock（GET_LOCK）。取れなければ ENTRY_LOCKED
       ├ DB::beginTransaction()
       ├ Locator::loadCurrent()           … 現在の行を取得
       ├ Snapshot::equals(item.before)?   … 違えば STALE_SNAPSHOT
@@ -207,7 +222,7 @@ JobRunner::runChunk(job)
 
 ```
 
-メディアのファイル保存はトランザクションの外で起きる副作用です。DB をロールバックすると「孤立メディア」ができる可能性がありますが、パス→メディア対応表に先に登録しておくので、次の実行で再利用されて重複しません。
+メディアの登録（判定から登録まで）は、名前付きロック（`GET_LOCK`）で他の処理と直列化します。ファイルの保存はトランザクションの外で起きる副作用です。DB をロールバックすると「孤立メディア」ができる可能性がありますが、パス→メディア対応表に先に登録しておくので、次の実行で再利用されて重複しません。
 
 ## 6. 画面設計
 
@@ -293,9 +308,8 @@ public function init()
 
     $inject = InjectTemplate::singleton();
     $inject->add('admin-topicpath', static fn (): string => Twig::renderTemplate('@archives_to_media/admin/topicpath.twig'));
-    $inject->add('admin-main', static fn (): string => Twig::renderTemplate('@archives_to_media/admin/main.twig', [
-        'bootstrap' => App::make('archives-to-media.admin-bootstrap')->toArray(), // bid・トークン・エンドポイント・定義一覧
-    ]));
+    // 初期データは PHP 側で JSON_HEX_TAG などを付けて文字列にし、Twig では |raw で差し込む（実装は ServiceProvider::renderAdminMain）
+    $inject->add('admin-main', fn (): string => $this->renderAdminMain());
 
     // URL は「/{DIR_OFFSET}相対パス」。ローカルファイルなので version（キャッシュ対策のクエリ）は自動で付く
     $base = '/' . DIR_OFFSET . PLUGIN_DIR . 'ArchivesToMedia/assets/';
@@ -317,7 +331,7 @@ public function init()
 <div id="a2m-root" class="a2m-root">
   <noscript>この画面を使うには JavaScript を有効にしてください。</noscript>
 </div>
-<script type="application/json" id="a2m-bootstrap">{{ bootstrap|json_encode|raw }}</script>
+<script type="application/json" id="a2m-bootstrap">{{ bootstrap_json|raw }}</script>
 ```
 
 - ハンドルはプラグイン名を接頭辞にして、ほかのプラグインと重複させない（重複すると後から登録した方が無視される）。
@@ -334,10 +348,11 @@ public function init()
 | カラム | 型 | 説明 |
 |---|---|---|
 | `job_id` | int(11) PK | `SQL::nextval('a2m_job_id', dsn(), true)`（`sequence_plugin`） |
-| `job_status` | varchar(16) | draft / scanning / scanned / running / paused / completed / failed / rolling_back / rolled_back |
+| `job_status` | varchar(16) | draft / scanning / scanned / running / paused / completed / failed / rolling_back / rolled_back / finalized |
 | `job_options` | longtext | JSON: 対象種類、ユニット型マッピング、フィールド名マッピング、各オプション（§7.4） |
 | `job_total` / `job_converted` / `job_skipped` / `job_error` | int(11) | 集計値（表示用のキャッシュ） |
-| `job_scan_cursor` | varchar(255) | スキャン再開位置（スキャナ種別:最後のキー） |
+| `job_scan_cursor` | text | 再開位置（操作ごとに形が違う。ほかの操作のカーソルを読んでも、無視して先頭からになる）。スキャンは `{s: スキャナの番号, c: スキャナのカーソル}`、クリーンアップは `cleanup:{item_id}`、再実行は `requeue:{item_id}`、確定は `finalize:{item_id}`、ロールバックは `{"p":"items","before":N}` / `{"p":"media","after":N,"failed":[…],"extra":N}` |
+| `job_message` | text | 失敗・削除失敗などの利用者向けメッセージ |
 | `job_user_id` | int(11) | 実行したユーザー |
 | `job_blog_id` | int(11) MUL | 実行ブログ |
 | `job_created_datetime` / `job_started_datetime` / `job_finished_datetime` | datetime |  |
@@ -353,28 +368,31 @@ public function init()
 | `item_locator` | varchar(512) | JSON。ユニット: `{"column_id","rev_id"}`、フィールド: `{"key","sort","owner":"eid","owner_id","unit_id","rev_id","blog_id"}` |
 | `item_owner_type` / `item_owner_id` | varchar(8) / int(11) | 絞り込みと表示用（entry / category / blog / user / module） |
 | `item_source_paths` | text | JSON 配列（多言語ユニットは複数） |
-| `item_preview` | varchar(16) | ドライランの見込み: `new` / `reuse` / `mixed` / `skip` |
-| `item_media_ids` | varchar(255) | 実行後の media_id（カンマ区切り） |
+| `item_preview` | varchar(16) | ドライランの見込み: `new` / `reuse` / `mixed` / `skip` / `unknown`（時間の予算を超えたため、ファイル全体のハッシュ計算を後回しにした。実行時に判定する） |
+| `item_media_ids` | text | 実行後の media_id（カンマ区切り） |
 | `item_status` | varchar(16) MUL | `pending` / `excluded` / `converted` / `skipped` / `error` / `rolled_back` |
 | `item_reason` | varchar(32) | §4.6 の理由コード、または `ALT_MISMATCH` などの警告 |
 | `item_message` | text | 人が読むための詳細メッセージ |
-| `item_before` / `item_after` | longtext | 変換前後の行スナップショット（JSON）。ロールバックと競合検知に使う |
+| `item_locator_hash` | char(40) | `item_locator` の SHA-1。同じジョブ内で同じ所在を二重に登録しないためのユニークキー（スキャンの再開を冪等にする） |
+| `item_before` / `item_after` | longtext | 変換前後の行スナップショット（JSON）。ロールバックと競合検知に使う。ジョブを確定（§10.5）すると NULL にする |
+| `item_cleanup` | longtext | クリーンアップで消した旧キーの行（JSON）。ロールバックで戻す |
 | `item_blog_id` | int(11) | データの所有ブログ |
 | `item_updated_datetime` | datetime |  |
 
-インデックス: `(item_job_id, item_status)`、`(item_job_id, item_target)`。
+インデックス: UNIQUE `(item_job_id, item_locator_hash)`、`(item_job_id, item_status)`、`(item_job_id, item_target)`、`(item_job_id, item_id)`（CSV などを item_id 順に読む用）、`(item_job_id, item_target, item_status, item_preview, item_reason)`（種類別の集計用）。
 
 ### 7.3 `a2m_path_map` — パス → メディア対応表（ジョブをまたいで使う）
 
 | カラム | 型 | 説明 |
 |---|---|---|
 | `map_blog_id` | int(11) | メディアの所属ブログ |
-| `map_source_path` | varchar(512) | archives 相対パス（通常サイズのパスに正規化。`large-` は除く） |
+| `map_source_path` | varchar(512, utf8mb4_bin) | archives 相対パス（通常サイズのパスに正規化。`large-` は除く） |
+| `map_path_hash` | char(40) | `map_source_path` の SHA-1（ユニークキーはこちらに張る） |
 | `map_media_id` | int(11) |  |
 | `map_created_by_job` | int(11) NULL | このプラグインで新規作成したメディアならジョブ ID、再利用なら NULL |
 | `map_created_datetime` | datetime |  |
 
-UNIQUE `(map_blog_id, map_source_path)`。使い道は 3 つです。
+UNIQUE `(map_blog_id, map_path_hash)`。使い道は 3 つです。
 
 - 同じパスを 2 回目以降に登録しない（ハッシュ照合より速い）
 - ロールバック時に「このジョブが作ったメディア」を特定する
@@ -418,10 +436,8 @@ plugins/ArchivesToMedia/
 ├ package.json / vite.config.ts / tsconfig.json / .stylelintrc.json
 ├ src/
 │  ├ ServiceProvider.php             … Twig 登録・InjectTemplate・アセット API・DI・install/uninstall
-│  ├ POST/ArchivesToMedia/           … 書き込み系（ACMS_POST, トークン必須。Services を呼ぶだけ）
-│  │  ├ CreateJob.php  Scan.php  Run.php  Rollback.php  Exclude.php  DeleteJob.php
-│  ├ GET/Admin/ArchivesToMedia/      … 読み取り系 JSON（同上）
-│  │  ├ Jobs.php  Job.php  Items.php  Definitions.php  ExportCsv.php
+│  ├ POST/ArchivesToMedia/           … 入口（ACMS_POST, トークン必須。ApiEndpoint を呼ぶだけ）
+│  │  ├ Api.php（action で振り分ける JSON API）  ExportCsv.php
 │  ├ Services/
 │  │  ├ Domain/
 │  │  │  ├ TargetType.php  ItemStatus.php  JobStatus.php  ReasonCode.php   … enum
@@ -579,19 +595,31 @@ private function registerServices(): void
 
 ## 9. エンドポイント
 
-書き込みはすべて ACMS_POST モジュールで行い、`formToken` を検証します。読み取りは管理画面の GET モジュールで JSON を返します。
+入口は 2 つの ACMS_POST モジュールです。どちらも `formToken`（CSRF）をコアの `ACMS_POST` が検証し、`sessionWithAdministration()` で管理者であることを確かめます。
 
-| 種別 | モジュール | 入力 | 出力 |
-|---|---|---|---|
-| POST | `ArchivesToMedia_CreateJob` | options(JSON) | `{jobId}` |
-| POST | `ArchivesToMedia_Scan` | jobId | `{status, scanned, total, done:boolean}`（チャンク） |
-| POST | `ArchivesToMedia_Exclude` | jobId, itemIds[] / filter, excluded:bool | `{updated}` |
-| POST | `ArchivesToMedia_Run` | jobId | `{status, processed, converted, skipped, error, done, log[]}`（チャンク） |
-| POST | `ArchivesToMedia_Rollback` | jobId, deleteCreatedMedia:bool | チャンク結果 |
-| GET | `Admin_ArchivesToMedia_Jobs` | page | ジョブ一覧 |
-| GET | `Admin_ArchivesToMedia_Items` | jobId, target, status, reason, owner, q, page, sort | アイテム一覧（Dataview 用） |
-| GET | `Admin_ArchivesToMedia_Definitions` | — | メディアユニット定義の一覧、画像・ファイル系フィールドのキー一覧（スキャン前の設定 UI 用） |
-| GET | `Admin_ArchivesToMedia_ExportCsv` | jobId | 結果 CSV（旧パス, media_id, 所属, 状態, 理由） |
+| モジュール | 用途 | 出力 |
+|---|---|---|
+| `ACMS_POST_ArchivesToMedia_Api` | `action` で操作を振り分ける JSON API | JSON（エラーは HTTP ステータス 403 / 404 / 409 / 422 / 500 と `{error, code}`） |
+| `ACMS_POST_ArchivesToMedia_ExportCsv` | 結果 CSV（jobId） | UTF-8 BOM 付き CSV（数式として解釈されうる値は無害化） |
+
+`Api` の `action`（`ApiEndpoint::ACTIONS`）:
+
+| action | 入力 | 内容 |
+|---|---|---|
+| `definitions` | — | メディアユニットの種類、元ユニット種類、フィールド名（管理権限のあるブログだけ） |
+| `jobs` / `job` | page / jobId | 一覧 / 概要（件数・集計・クリーンアップ対象） |
+| `create` / `update` | options(JSON) / jobId | ジョブの作成 / オプション更新（再スキャン用にアイテムを消す） |
+| `scan` | jobId | スキャン 1 チャンク |
+| `exclude` | jobId, ids または filter, excluded | 除外の切り替え |
+| `items` | jobId, target, status, reason, owner, preview, q, sort, desc, page, perPage | アイテム一覧 |
+| `run` / `pause` | jobId | 実行 1 チャンク / 一時停止 |
+| `requeue` | jobId | スキップ・エラー分を pending に戻す（時間の予算で区切り、`done` が false の間は続けて呼ぶ） |
+| `rollback` | jobId, deleteCreatedMedia | ロールバック 1 チャンク |
+| `cleanup` | jobId | 旧データのクリーンアップ 1 チャンク |
+| `finalize` | jobId | 変換を確定（§10.5） |
+| `delete` | jobId | ジョブの削除 |
+
+アイテム一覧のページ番号には上限（10000）があります。
 
 ## 10. 冪等性・再実行・ロールバック
 
@@ -606,6 +634,9 @@ private function registerServices(): void
 
 ### 10.3 ロールバック
 
+- 位置はジョブのカーソルに持つ（items フェーズ → media フェーズ）。エントリーが別の処理で更新中でロックを取れないアイテムは、エラーにせず `converted` のまま残してカーソルで飛ばし、最後まで進んだあとも残っていれば、ジョブを `rolling_back` のまま（`job_message` に理由を入れて）区切り、「あとでもう一度ロールバック」できるようにする（`paused` は変換の一時停止を表す状態で、`run` が通ってしまうので使わない）。メディア削除の途中（変換済みが 0 件）でも、`rolling_back` のジョブにはロールバックの再開ができる。ロールバック中に例外が起きたときも `failed` にはせず、`rolling_back` のまま理由を `job_message` に残す（`failed` は変換の実行の失敗だけ）。前のロールバックが media フェーズで止まったあとに変換済みが増えていたら、先に items フェーズでそれを戻す。
+- 「作成メディアを削除」の参照判定と削除は、200 件ずつチャンクに区切って進める。
+
 - `converted` のアイテムを item_id の降順で `restore()` する。現在行が `item_after` と違う場合（変換後に編集された）は戻さず `ROLLBACK_CONFLICT` とする。
 - オプション「このジョブで作成したメディアを削除」: `map_created_by_job = jobId` のメディアのうち、ユニット（media 系の `column_field_1`）とフィールド（`%@media`）のどこからも参照されていないものだけ削除し、対応表の行も消す。既定はオフ。
 
@@ -613,25 +644,43 @@ private function registerServices(): void
 
 テンプレートの移行が終わった後で、別名モードで残した旧キー（`{fd}@path` 系）を削除します。アイテム単位で記録しておくので、どのジョブのものかを指定して消せます。archives の実ファイルは、どのモードでも削除しません（他の参照や外部リンクがありうるため）。
 
+### 10.5 変換の確定（finalize）
+
+`a2m_item` の `item_before` / `item_after` / `item_cleanup` は行全体のスナップショットで、数十万件のサイトでは大きくなります。変換結果を確認し、テンプレートの移行も終わったら、`finalize` で完了済み（`completed`）のジョブを確定できます。
+
+- スナップショットを NULL にして容量を回収し、ジョブを `finalized` にする。
+- 件数が多くても 1 リクエストで終わらせないよう、2000 件ずつ・時間の予算で区切る。途中で止まっても、確定済み（`finalized`）のジョブに対して `finalize` を呼び直せば、残りを回収できる（`done` が true になるまで繰り返す）。
+- 別名モードで旧データのクリーンアップが済んでいない（`cleanable` > 0）ジョブは、確定するとクリーンアップできなくなるため、`keepLegacyKeys`（旧データを残したまま確定する確認）が無ければ拒否する。
+- 確定後は、ロールバック・再実行・クリーンアップはできない。結果の件数と CSV、作成したメディアは残る。
+- 確定済みのジョブは、変換済みのアイテムが残っていても削除できる。アンインストールの「ロールバックできる変換済みアイテムが残っている」判定にも数えない。
+
 ## 11. エラー処理・ログ
 
 - アイテム単位の失敗はそのアイテムの `error` / `skipped` に閉じ込め、ジョブは止めない。
 - チャンク全体の失敗（DB 接続断など）では、ジョブを `failed` にし、例外メッセージを返す。再開ボタンで続きからやり直せる。
 - ジョブの開始・完了・ロールバックは `AcmsLogger::info` で監査ログに残す（件数、オプション、ユーザー）。アイテム単位のエラーは `AcmsLogger::notice`。
-- `MediaSourceImportException` のメッセージを理由コードに対応させる（存在しない → `SOURCE_NOT_FOUND` など）。
+- `MediaSourceImportException` のメッセージを理由コードに対応させる（存在しない → `SOURCE_NOT_FOUND` など）。画面・CSV・ジョブに記録するのは理由コードの文言だけで、コアの文言（サーバーのパスなどを含みうる）は監査ログにだけ残す。
+- 画面・CSV・ジョブの記録に出してよい文言は、`PublicMessage` を実装した例外（`SourceException`、`StateException`、`InvalidInputException` など）のものだけ。それ以外の例外（DB やコアが投げるもの）は定型文にし、詳細を監査ログに残す（`ErrorMessage`）。
+- DB への書き込みで、列に入らない値を黙って切り詰めない。コアは接続ごとに `sql_mode` を非 strict にするので、長さを PHP 側で確かめ、超えるときは例外にする（スキャンでは、パスを外したエラーのアイテムとして残す）。
 
 ## 12. 権限・セキュリティ
 
-- 使えるのは管理者（`sessionWithAdministration()`）だけ。子ブログを含める場合は、各ブログへの管理権限も確認する。
+- 使えるのは管理者（`sessionWithAdministration()`）だけ。子ブログを含めるジョブは、書き換え系の操作（スキャン・実行・再実行・ロールバック・クリーンアップ・確定）のたびに、含める全ブログへの管理権限を確認する。読み取り（アイテム一覧・CSV・定義）は、操作する人に管理権限のある子ブログの行だけを返す。
 - 全 POST で CSRF トークンを検証し、`jobId` の `job_blog_id` が現在の BID（または権限のある子孫）であることを確認する。
 - ファイルパスは DB の値ですが、改ざんされている可能性を前提に、必ずコアの `validateDirectoryTraversalPath`（realpath 後の再検証込み）を通す。
 - SVG はコアの `sanitizeSvg` の経路に乗るので、そのまま安全側に倒れる。
-- 実行中は `Common\Lock` でブログ単位の多重実行を防ぐ。ロックは 10 分で失効し、ブラウザが閉じられても固まらない。
+- 実行中は `Common\Lock`（`flock`）でブログ単位の多重実行を防ぐ。プロセスが終わればロックは自動で外れるので、ブラウザが閉じられても固まらない。
+- 状態を変える操作（実行・ロールバックの開始、再スキャン、確定）は、`JobRepository::transition()` で「今の状態が期待どおりか」を行ロックで確かめながら進める。別のタブで状態が変わっていれば `StateException` で拒否し、状態を上書きしない。
+- エントリーに属する書き込み（ユニット、エントリー所属のフィールド、ロールバック、クリーンアップ）は、コアの `UnitLock`（MySQL の `GET_LOCK`、エントリー単位）の中で行う。コアのエントリー保存・リビジョン切り替えと直列化するため。編集ロック（`entry_lock`）は Professional 版以上の機能なので、これとは別に必要。
+- メディアの登録（重複の判定から登録まで）は、名前付きロックで直列化する。別のブログで動く同じ処理が同じ内容を同時に登録しても、既存のメディアを新規作成と取り違えない。
 
 ## 13. 性能・運用
 
 - 1 リクエストの処理目安は 20 アイテム、または 20 秒。経過時間を見て早めに打ち切る（`max_execution_time` 30 秒の環境向け）。
-- スキャンはキーセットページング（`column_id`、`field_key, field_eid…`）で行い、OFFSET は使わない。
+- スキャンはキーセットページングで行い、OFFSET は使わない。並び順と比較には、主キー（`column_id`）や所属 ID の素のカラムを使う（`BINARY` や計算式を通すとインデックスが使えず、チャンクごとに全件の並べ替えになる）。フィールドは所属の種類ごとに所属 ID の昇順で「`@path` を持つ所属」を取り、その所属の行をまとめて読む。
+- スキャンの候補の登録は、5 件ずつ時間を確かめながら行う（ドライランはファイル全体のハッシュを計算するため）。
+- アイテム一覧は、並べ替えと切り出しを `item_id` だけで行い、あとから行を読む。絞り込みが無ければ総数を数え直さない。CSV は `item_id` のキーセットで読む。
+- ロールバックの「作成メディアを削除」の参照判定は、メディアを 200 件ずつまとめて、テーブルごとに 1 回の走査で調べる。
 - ドライランの `importDryRun` はファイル全体のハッシュ計算をするので、スキャンも同じくチャンク処理にする。
 - 本番前にはステージングで、DB バックアップ → 実行 → 表示確認 → ロールバックまでを一通り試すことを、画面と README の両方で案内する。
 

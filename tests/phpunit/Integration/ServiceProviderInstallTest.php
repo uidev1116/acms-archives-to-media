@@ -72,6 +72,22 @@ final class ServiceProviderInstallTest extends TestCase
     }
 
     #[Test]
+    public function 確定済みのジョブの変換済みアイテムは_アンインストールを妨げない(): void
+    {
+        $db = new Db();
+        $schema = new Schema($db);
+        $db->exec('INSERT INTO ' . $db->t('a2m_job') . ' (job_id, job_status, job_options, job_user_id, job_blog_id, job_created_datetime) VALUES (987656, \'finalized\', \'{}\', 1, 1, NOW())');
+        $db->exec('INSERT INTO ' . $db->t('a2m_item') . ' (item_job_id, item_target, item_table, item_locator, item_locator_hash, item_source_paths, item_status, item_blog_id, item_updated_datetime)'
+            . ' VALUES (987656, \'unit_image\', \'column\', \'{}\', ?, \'[]\', \'converted\', 1, NOW())', [sha1('a2m-finalized')]);
+        try {
+            $this->assertSame(0, $schema->rollbackableItems());
+        } finally {
+            $db->exec('DELETE FROM ' . $db->t('a2m_item') . ' WHERE item_job_id = 987656');
+            $db->exec('DELETE FROM ' . $db->t('a2m_job') . ' WHERE job_id = 987656');
+        }
+    }
+
+    #[Test]
     public function 強制指定ならロールバックできる変換済みアイテムがあっても削除できる(): void
     {
         $db = new Db();

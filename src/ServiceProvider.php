@@ -38,6 +38,7 @@ use Acms\Plugins\ArchivesToMedia\Services\Support\BlogScope;
 use Acms\Plugins\ArchivesToMedia\Services\Support\CacheInvalidator;
 use Acms\Plugins\ArchivesToMedia\Services\Support\Db;
 use Acms\Plugins\ArchivesToMedia\Services\Support\EntryLockGuard;
+use Acms\Plugins\ArchivesToMedia\Services\Support\EntrySerializer;
 use Acms\Plugins\ArchivesToMedia\Services\Support\FieldStore;
 use Acms\Plugins\ArchivesToMedia\Services\Support\Schema;
 use Acms\Services\Common\InjectTemplate;
@@ -49,6 +50,7 @@ use Acms\Services\Facades\Twig;
 use Acms\Services\Media\Helper;
 use Acms\Services\Media\MediaSourceImporter;
 use Acms\Services\Storage\Filesystem;
+use Acms\Services\Unit\UnitLock;
 
 /**
  * ArchivesToMedia: archives/ を参照しているユニット・フィールドを、メディア参照へ一括変換する拡張アプリ。
@@ -210,12 +212,24 @@ class ServiceProvider extends ACMS_App
      */
     private function registerServices(): void
     {
+        $version = $this->version;
         $archivesBase = static fn (): string => SCRIPT_DIR . ARCHIVES_DIR;
         $maxSize = static fn (): int => (int) config('archives_to_media_max_filesize', 50 * 1024 * 1024);
 
         App::singleton('archives-to-media.db', static fn () => new Db());
         App::singleton('archives-to-media.blog-scope', static fn () => new BlogScope(self::db()));
         App::singleton('archives-to-media.audit-log', static fn () => new AuditLog());
+        // エントリーの保存・リビジョン切り替えと同じ UnitLock（GET_LOCK）の中で書き込む。ロック機構が無い古いコアでは直列化しない
+        App::singleton('archives-to-media.entry-serializer', static function (): EntrySerializer {
+            if (!class_exists(UnitLock::class)) {
+                return new EntrySerializer();
+            }
+            return new EntrySerializer(static function (int $entryId, callable $fn): mixed {
+                $lock = App::make('unit-lock');
+                assert($lock instanceof UnitLock);
+                return $lock->withLock($entryId, $fn, 3);
+            });
+        });
         App::singleton('archives-to-media.cache-invalidator', static fn () => new CacheInvalidator(self::db()));
 
         // コアの media.source-importer は CSV インポート用のベースで登録済みなので流用せず、
@@ -238,6 +252,7 @@ class ServiceProvider extends ACMS_App
             new MediaMetaWriter(self::db(), self::media()),
             $archivesBase(),
             $maxSize(),
+            self::db(),
         ));
 
         App::singleton('archives-to-media.converters', static function () use ($archivesBase): array {
@@ -287,6 +302,7 @@ class ServiceProvider extends ACMS_App
                 self::get('archives-to-media.cache-invalidator', CacheInvalidator::class),
                 self::db(),
                 $lockFactory,
+                self::get('archives-to-media.entry-serializer', EntrySerializer::class),
             );
         });
         App::singleton('archives-to-media.cleaner', static function () use ($lockFactory): Cleaner {
@@ -300,19 +316,26 @@ class ServiceProvider extends ACMS_App
                 new EntryLockGuard(self::db(), $entryLock),
                 self::get('archives-to-media.cache-invalidator', CacheInvalidator::class),
                 $lockFactory,
+                self::get('archives-to-media.entry-serializer', EntrySerializer::class),
             );
         });
-        App::singleton('archives-to-media.rollbacker', static fn () => new Rollbacker(
-            self::converters(),
-            self::get('archives-to-media.item-repository', ItemRepository::class),
-            self::get('archives-to-media.job-repository', JobRepository::class),
-            self::get('archives-to-media.path-map', PathMapRepository::class),
-            new MediaReferenceChecker(self::db()),
-            self::media(),
-            self::get('archives-to-media.cache-invalidator', CacheInvalidator::class),
-            $lockFactory,
-            new FieldStore(self::db()),
-        ));
+        App::singleton('archives-to-media.rollbacker', static function () use ($lockFactory): Rollbacker {
+            $entryLock = App::make('entry.lock');
+            assert($entryLock instanceof \Acms\Services\Entry\Lock);
+            return new Rollbacker(
+                self::converters(),
+                self::get('archives-to-media.item-repository', ItemRepository::class),
+                self::get('archives-to-media.job-repository', JobRepository::class),
+                self::get('archives-to-media.path-map', PathMapRepository::class),
+                new MediaReferenceChecker(self::db()),
+                self::media(),
+                self::get('archives-to-media.cache-invalidator', CacheInvalidator::class),
+                $lockFactory,
+                new FieldStore(self::db()),
+                self::get('archives-to-media.entry-serializer', EntrySerializer::class),
+                new EntryLockGuard(self::db(), $entryLock),
+            );
+        });
         App::singleton('archives-to-media.job-service', static fn () => new JobService(
             self::get('archives-to-media.job-repository', JobRepository::class),
             self::get('archives-to-media.item-repository', ItemRepository::class),
@@ -323,6 +346,7 @@ class ServiceProvider extends ACMS_App
             self::get('archives-to-media.audit-log', AuditLog::class),
             self::get('archives-to-media.blog-scope', BlogScope::class),
             static fn (int $blogId): bool => sessionWithAdministration($blogId),
+            static fn (): array => array_values(array_map(static fn (mixed $v): string => Cast::str($v), configArray('column_add_type'))),
         ));
         App::singleton('archives-to-media.admin-api', static fn () => new AdminApi(
             self::get('archives-to-media.job-service', JobService::class),
@@ -330,17 +354,20 @@ class ServiceProvider extends ACMS_App
                 self::db(),
                 self::get('archives-to-media.blog-scope', BlogScope::class),
                 static fn (): array => array_values(array_map(static fn (mixed $v): string => Cast::str($v), configArray('column_add_type'))),
+                static fn (int $blogId): bool => sessionWithAdministration($blogId),
             ),
         ));
         App::singleton('archives-to-media.api-endpoint', static fn () => new ApiEndpoint(
             self::get('archives-to-media.admin-api', AdminApi::class),
             self::get('archives-to-media.audit-log', AuditLog::class),
         ));
-        App::singleton('archives-to-media.admin-bootstrap', static fn () => new AdminBootstrap(
-            BID,
-            '0.1.0',
-            Cast::str(acmsLink(['bid' => BID, 'admin' => 'app_archives_to_media_index'])),
-        ));
+        App::singleton('archives-to-media.admin-bootstrap', static function () use ($version): AdminBootstrap {
+            return new AdminBootstrap(
+                BID,
+                $version,
+                Cast::str(acmsLink(['bid' => BID, 'admin' => 'app_archives_to_media_index'])),
+            );
+        });
     }
 
     private static function db(): Db

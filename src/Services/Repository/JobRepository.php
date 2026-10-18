@@ -75,11 +75,20 @@ class JobRepository
     public function transition(int $id, array $from, JobStatus $to): bool
     {
         $values = array_map(static fn (JobStatus $s): string => $s->value, $from);
-        $affected = $this->db->exec(
-            'UPDATE ' . $this->db->t('a2m_job') . ' SET job_status = ?, job_message = NULL WHERE job_id = ? AND job_status IN (' . $this->db->placeholders($values) . ')',
-            [$to->value, $id, ...$values]
-        );
-        return $affected > 0;
+        // UPDATE の影響行数は「実際に変わった行数」なので、同じ状態への遷移（Running → Running など）では 0 になる。
+        // 行ロックを取って現在の状態を確かめてから更新する。
+        return $this->db->transaction(function () use ($id, $values, $to): bool {
+            $current = $this->db->row('SELECT job_status FROM ' . $this->db->t('a2m_job') . ' WHERE job_id = ?', [$id], ' FOR UPDATE');
+            if ($current === null || !in_array(Cast::str($current['job_status']), $values, true)) {
+                return false;
+            }
+            $started = $to === JobStatus::Running ? ', job_started_datetime = COALESCE(job_started_datetime, ?)' : '';
+            $this->db->exec(
+                'UPDATE ' . $this->db->t('a2m_job') . ' SET job_status = ?, job_message = NULL' . $started . ' WHERE job_id = ?',
+                [$to->value, ...($started === '' ? [] : [$this->now()]), $id]
+            );
+            return true;
+        });
     }
 
     public function setOptions(int $id, JobOptions $options): void
@@ -111,6 +120,10 @@ class JobRepository
         );
     }
 
+    /**
+     * ジョブの行とアイテムを消す。アイテムが多いときは、先に ItemRepository::deleteByJob() で
+     * 区切って消しておく（ここでは残りを消すだけ）。
+     */
     public function delete(int $id): void
     {
         $this->db->exec('DELETE FROM ' . $this->db->t('a2m_item') . ' WHERE item_job_id = ?', [$id]);

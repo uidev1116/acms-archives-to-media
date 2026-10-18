@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { DefinitionsProvider } from '../definitions';
@@ -73,6 +73,9 @@ describe('JobDetailPage', () => {
   it('削除すると一覧へ移動する', async () => {
     mount();
     await userEvent.click(await screen.findByRole('button', { name: 'ジョブを削除' }));
+    await userEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: '削除する' }),
+    );
     await waitFor(() => expect(window.location.hash).toBe('#/jobs'));
   });
 });

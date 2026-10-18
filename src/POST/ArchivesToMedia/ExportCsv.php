@@ -32,6 +32,8 @@ class ExportCsv extends ACMS_POST
             httpStatusCode('404 Not Found');
             die('not found');
         }
+        // 件数が多いジョブでも途中で切れないよう、時間の制限を延ばす（サーバーが許す範囲で）
+        @set_time_limit(300);
         header('Content-Type: text/csv; charset=UTF-8');
         header('Content-Disposition: attachment; filename="archives-to-media-job-' . $jobId . '.csv"');
         header('X-Content-Type-Options: nosniff');

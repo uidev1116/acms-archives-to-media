@@ -28,24 +28,32 @@ final class JobServiceTest extends A2mTestCase
     /** @var \Closure(int): bool */
     private \Closure $canAdminister;
 
-    private function service(): JobService
+    private function coordinator(): ScanCoordinator
     {
-        $this->canAdminister ??= static fn (int $blogId): bool => true;
         $store = new FieldStore($this->db);
         $names = new FieldNameResolver();
-        $converters = [$this->unitImageConverter(), $this->unitFileConverter(), $this->fieldConverter()];
-        $coordinator = new ScanCoordinator(
+        return new ScanCoordinator(
             [
                 new UnitImageScanner($this->db, $this->blogScope()),
                 new UnitFileScanner($this->db, $this->blogScope()),
                 new FieldImageScanner($this->db, $this->blogScope(), $store, $names),
                 new FieldFileScanner($this->db, $this->blogScope(), $store, $names),
             ],
-            $converters,
+            [$this->unitImageConverter(), $this->unitFileConverter(), $this->fieldConverter()],
             $this->resolver(),
             $this->items(),
             $this->jobs(),
         );
+    }
+
+    /** @var (\Closure(): list<string>)|null */
+    private ?\Closure $mediaUnitTypes = null;
+
+    private function service(): JobService
+    {
+        $this->canAdminister ??= static fn (int $blogId): bool => true;
+        $converters = [$this->unitImageConverter(), $this->unitFileConverter(), $this->fieldConverter()];
+        $coordinator = $this->coordinator();
         return new JobService(
             $this->jobs(),
             $this->items(),
@@ -56,6 +64,7 @@ final class JobServiceTest extends A2mTestCase
             new AuditLog(),
             $this->blogScope(),
             $this->canAdminister,
+            $this->mediaUnitTypes,
         );
     }
 
@@ -140,9 +149,10 @@ final class JobServiceTest extends A2mTestCase
         $operations = [
             'scan' => fn () => $service->scan($job->id, $parent),
             'run' => fn () => $service->run($job->id, $parent),
-            'requeue' => fn () => $service->requeue($job->id, $parent),
+            'requeue' => fn () => $service->requeueChunk($job->id, $parent),
             'rollback' => fn () => $service->rollback($job->id, $parent, false),
             'cleanup' => fn () => $service->cleanup($job->id, $parent),
+            'exclude' => fn () => $service->exclude($job->id, $parent, null, ['q' => 'a'], true),
         ];
         foreach ($operations as $name => $operation) {
             try {
@@ -155,6 +165,72 @@ final class JobServiceTest extends A2mTestCase
         // 読み取りと一時停止、削除は妨げない
         $this->assertSame($job->id, $service->get($job->id, $parent)['job']['id']);
         $service->delete($job->id, $parent);
+    }
+
+    #[Test]
+    public function 子ブログを含めるジョブの一覧とCSVは_管理権限の無い子ブログの行を出さない(): void
+    {
+        $parent = $this->createTestBlog(['blog_left' => 1, 'blog_right' => 4]);
+        $child = $this->createTestBlog(['blog_parent' => $parent, 'blog_left' => 2, 'blog_right' => 3]);
+        $parentEntry = $this->createTestEntry($parent, null);
+        $childEntry = $this->createTestEntry($child, null);
+        $this->insertColumn('pa', 'image', ['column_field_2' => 'p.jpg'], $parentEntry, $parent);
+        $this->insertColumn('ch', 'image', ['column_field_2' => 'secret/c.jpg'], $childEntry, $child);
+
+        $this->canAdminister = static fn (int $blogId): bool => true;
+        $job = $this->service()->create($parent, 1, ['includeChildBlogs' => true, 'chunkSize' => 50]);
+        $this->service()->scan($job->id, $parent);
+        $this->assertSame(2, $this->service()->items($job->id, $parent, [], 'item_id', false, 1, 50)['total']);
+
+        // 別の管理者（親ブログだけ管理できる）が見る
+        $this->canAdminister = static fn (int $blogId): bool => $blogId !== $child;
+        $service = $this->service();
+        $items = $service->items($job->id, $parent, [], 'item_id', false, 1, 50);
+        $this->assertSame(1, $items['total']);
+        $this->assertSame([$parent], array_unique(array_map(static fn (array $i): int => Cast::int($i['blogId']), $items['items'])));
+
+        $stream = $this->memoryStream();
+        $service->writeCsv($job->id, $parent, $stream);
+        rewind($stream);
+        $csv = (string) stream_get_contents($stream);
+        $this->assertStringContainsString('p.jpg', $csv);
+        $this->assertStringNotContainsString('secret/c.jpg', $csv);
+    }
+
+    #[Test]
+    public function 定義の取得は_管理権限の無い子ブログのフィールド名やユニット種類を含めない(): void
+    {
+        $parent = $this->createTestBlog(['blog_left' => 1, 'blog_right' => 4]);
+        $child = $this->createTestBlog(['blog_parent' => $parent, 'blog_left' => 2, 'blog_right' => 3]);
+        $childEntry = $this->createTestEntry($child, null);
+        $this->insertColumn('ch', 'image_9', ['column_field_2' => 'c.jpg'], $childEntry, $child);
+        $this->insertImageField('secret_hero', 'c.jpg', 1, '', ['field_eid' => $childEntry, 'field_blog_id' => $child]);
+
+        $all = new DefinitionProvider($this->db, $this->blogScope(), static fn (): array => ['media'], static fn (int $id): bool => true);
+        $some = new DefinitionProvider($this->db, $this->blogScope(), static fn (): array => ['media'], static fn (int $id): bool => $id !== $child);
+
+        $this->assertContains('secret_hero', $all->get($parent)['fieldKeys']['image']);
+        $this->assertSame([['type' => 'image_9', 'count' => 1]], $all->get($parent)['sourceUnitTypes']);
+        $this->assertNotContains('secret_hero', $some->get($parent)['fieldKeys']['image']);
+        $this->assertSame([], $some->get($parent)['sourceUnitTypes']);
+    }
+
+    #[Test]
+    public function サイトに無いメディアユニットの種類へのマッピングは拒否する(): void
+    {
+        $this->mediaUnitTypes = static fn (): array => ['media', 'media_2'];
+
+        $ok = $this->service()->create($this->blogId, 1, ['unitTypeMap' => ['image' => 'media_2', 'file' => 'media']]);
+        $this->assertSame('media_2', $ok->options->unitTypeMap['image']);
+
+        try {
+            $this->service()->create($this->blogId, 1, ['unitTypeMap' => ['image' => 'media_7']]);
+            $this->fail('拒否されるはず');
+        } catch (\Acms\Plugins\ArchivesToMedia\Services\Support\InvalidInputException $e) {
+            $this->assertStringContainsString('media_7', $e->getMessage());
+        }
+        $this->expectException(\Acms\Plugins\ArchivesToMedia\Services\Support\InvalidInputException::class);
+        $this->service()->updateOptions($ok->id, $this->blogId, ['unitTypeMap' => ['image' => 'media_9']]);
     }
 
     #[Test]
@@ -298,6 +374,99 @@ final class JobServiceTest extends A2mTestCase
     }
 
     #[Test]
+    public function 確定するとスナップショットを捨てて容量を回収し_ロールバックはできなくなるが_ジョブは削除できる(): void
+    {
+        $this->seed();
+        $job = $this->service()->create($this->blogId, 1, ['chunkSize' => 50]);
+        $this->scan($job->id);
+        $this->service()->run($job->id, $this->blogId);
+        $converted = $this->items()->countByStatus($job->id)['converted'] ?? 0;
+        $this->assertGreaterThan(0, $converted);
+
+        $this->service()->finalize($job->id, $this->blogId);
+
+        $this->assertSame(JobStatus::Finalized, $this->jobs()->find($job->id)?->status);
+        $left = $this->db->one('SELECT COUNT(*) FROM ' . $this->db->t('a2m_item') . ' WHERE item_job_id = ? AND (item_before IS NOT NULL OR item_after IS NOT NULL OR item_cleanup IS NOT NULL)', [$job->id]);
+        $this->assertSame('0', Cast::str($left));
+        $this->assertSame($converted, $this->items()->countByStatus($job->id)['converted'] ?? 0, '件数と結果（CSV）は残る');
+        foreach (
+            [
+                'rollback' => fn () => $this->service()->rollback($job->id, $this->blogId, false),
+                'run' => fn () => $this->service()->run($job->id, $this->blogId),
+                'cleanup' => fn () => $this->service()->cleanup($job->id, $this->blogId),
+            ] as $name => $op
+        ) {
+            try {
+                $op();
+                $this->fail($name . ' は拒否されるはず');
+            } catch (\LogicException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+        $this->service()->delete($job->id, $this->blogId);
+        $this->assertNull($this->jobs()->find($job->id));
+    }
+
+    #[Test]
+    public function 確定は大きなジョブでも時間で区切って進められ_途中で止まっても続きから再実行できる(): void
+    {
+        $this->seed();
+        $job = $this->service()->create($this->blogId, 1, ['chunkSize' => 50]);
+        $this->scan($job->id);
+        $this->service()->run($job->id, $this->blogId);
+        $remaining = static fn (self $t): int => Cast::int($t->db->one('SELECT COUNT(*) FROM ' . $t->db->t('a2m_item') . ' WHERE item_job_id = ? AND (item_before IS NOT NULL OR item_after IS NOT NULL)', [$job->id]));
+        $this->assertGreaterThan(0, $remaining($this));
+
+        // 時間の予算が尽きた想定（1 回に 1 件だけ消す）
+        $first = $this->service()->finalize($job->id, $this->blogId, false, 1, 0.0);
+        $this->assertFalse($first['done']);
+        $this->assertSame(JobStatus::Finalized, $this->jobs()->find($job->id)?->status);
+        $this->assertGreaterThan(0, $remaining($this), '一部だけ消えた');
+        $this->assertTrue($this->service()->get($job->id, $this->blogId)['finalizing'], '回収の続きがある');
+
+        // 確定済みでも、続きの回収はやり直せる
+        for ($i = 0; $i < 20 && !($res['done'] ?? false); $i++) {
+            $res = $this->service()->finalize($job->id, $this->blogId, false, 1, 0.0);
+        }
+        $this->assertTrue($res['done'] ?? false);
+        $this->assertSame(0, $remaining($this));
+        $this->assertFalse($this->service()->get($job->id, $this->blogId)['finalizing'], '回収が済んだら続きは無い');
+    }
+
+    #[Test]
+    public function 旧データが残っているジョブの確定は_確認なしでは拒否する(): void
+    {
+        $this->archives->put('003/h.jpg', 'H');
+        $this->insertImageField('hero', '003/h.jpg');
+        $job = $this->service()->create($this->blogId, 1, ['chunkSize' => 50, 'targets' => ['field_image'], 'field' => ['mode' => 'suffix']]);
+        $this->scan($job->id);
+        $this->service()->run($job->id, $this->blogId);
+        $this->assertSame(1, $this->service()->get($job->id, $this->blogId)['cleanup']['cleanable']);
+
+        try {
+            $this->service()->finalize($job->id, $this->blogId);
+            $this->fail('旧データが残っているので拒否されるはず');
+        } catch (\Acms\Plugins\ArchivesToMedia\Services\Support\StateException $e) {
+            $this->assertStringContainsString('クリーンアップ', $e->getMessage());
+            $this->assertSame(JobStatus::Completed, $this->jobs()->find($job->id)?->status, '確定しない');
+        }
+
+        $this->service()->finalize($job->id, $this->blogId, true);
+        $this->assertSame('finalized', Cast::str($this->db->one('SELECT job_status FROM ' . $this->db->t('a2m_job') . ' WHERE job_id = ?', [$job->id])));
+        $this->assertSame(['cleanable' => 0, 'cleaned' => 0], $this->service()->get($job->id, $this->blogId)['cleanup'], '確定後はクリーンアップの対象なし');
+    }
+
+    #[Test]
+    public function 完了していないジョブは確定できない(): void
+    {
+        $this->seed();
+        $job = $this->service()->create($this->blogId, 1, ['chunkSize' => 50]);
+        $this->scan($job->id);
+        $this->expectException(\LogicException::class);
+        $this->service()->finalize($job->id, $this->blogId);
+    }
+
+    #[Test]
     public function 変換済みが無ければ削除できる(): void
     {
         $job = $this->service()->create($this->blogId, 1, []);
@@ -327,7 +496,7 @@ final class JobServiceTest extends A2mTestCase
         $this->assertSame('元ファイルが見つかりません', $row['reasonLabel']);
 
         $this->archives->put('001/gone.jpg', 'G');
-        $this->assertSame(1, $this->service()->requeue($job->id, $this->blogId));
+        $this->assertSame(1, $this->service()->requeueChunk($job->id, $this->blogId, true)['requeued']);
         $this->assertSame(1, $this->service()->run($job->id, $this->blogId)->converted);
     }
 
@@ -352,6 +521,82 @@ final class JobServiceTest extends A2mTestCase
         $this->assertStringNotContainsString(',=cmd', $csv);
         $this->assertStringContainsString("'=cmd|calc.jpg", $csv);
         $this->assertStringContainsString('SOURCE_NOT_FOUND', $csv);
+    }
+
+    #[Test]
+    public function 一覧のページ番号には上限があり_巨大なOFFSETにならない(): void
+    {
+        $this->seed();
+        $job = $this->service()->create($this->blogId, 1, ['chunkSize' => 50]);
+        $db = new \Acms\Plugins\ArchivesToMedia\Tests\Support\RecordingDb();
+        $service = new JobService(
+            $this->jobs(),
+            new \Acms\Plugins\ArchivesToMedia\Services\Repository\ItemRepository($db),
+            $this->coordinator(),
+            $this->runner(),
+            $this->rollbacker(),
+            $this->cleaner(),
+            new AuditLog(),
+            $this->blogScope(),
+            static fn (int $blogId): bool => true,
+        );
+        $api = new AdminApi($service, new DefinitionProvider($this->db, $this->blogScope(), static fn (): array => ['media']));
+
+        $api->handle('items', ['jobId' => $job->id, 'page' => '99999999', 'perPage' => '200'], $this->blogId, 1);
+
+        $offsets = [];
+        foreach ($db->selects as [$sql]) {
+            if (preg_match('/OFFSET (\d+)/', $sql, $m) === 1) {
+                $offsets[] = (int) $m[1];
+            }
+        }
+        $this->assertCount(1, $offsets);
+        $this->assertLessThanOrEqual(9999 * 200, $offsets[0]);
+    }
+
+    #[Test]
+    public function CSVは件数が多くても全件を書き出し_OFFSETやCOUNTを使わない(): void
+    {
+        $jobId = $this->jobs()->create($this->blogId, 1, \Acms\Plugins\ArchivesToMedia\Services\Domain\JobOptions::defaults());
+        $rows = [];
+        for ($i = 1; $i <= 450; $i++) {
+            $rows[] = $i;
+        }
+        foreach (array_chunk($rows, 100) as $chunk) {
+            $values = [];
+            $params = [];
+            foreach ($chunk as $i) {
+                $values[] = "(?, 'unit_image', 'column', ?, ?, 'entry', '1', '[\"a/{$i}.jpg\"]', 'new', 'skipped', 'SOURCE_NOT_FOUND', ?, ?)";
+                array_push($params, $jobId, '{"c":' . $i . '}', sha1((string) $i), $this->blogId, '2026-01-01 00:00:00');
+            }
+            $this->db->exec(
+                'INSERT INTO ' . $this->db->t('a2m_item') . ' (item_job_id, item_target, item_table, item_locator, item_locator_hash, item_owner_type, item_owner_id, item_source_paths, item_preview, item_status, item_reason, item_blog_id, item_updated_datetime) VALUES ' . implode(',', $values),
+                $params
+            );
+        }
+        $db = new \Acms\Plugins\ArchivesToMedia\Tests\Support\RecordingDb();
+        $service = new JobService(
+            $this->jobs(),
+            new \Acms\Plugins\ArchivesToMedia\Services\Repository\ItemRepository($db),
+            $this->coordinator(),
+            $this->runner(),
+            $this->rollbacker(),
+            $this->cleaner(),
+            new AuditLog(),
+            $this->blogScope(),
+            static fn (int $blogId): bool => true,
+        );
+
+        $stream = $this->memoryStream();
+        $service->writeCsv($jobId, $this->blogId, $stream);
+        rewind($stream);
+        $lines = array_values(array_filter(explode("\n", (string) stream_get_contents($stream)), static fn (string $l): bool => $l !== ''));
+
+        $this->assertCount(451, $lines, '見出し + 450 件');
+        foreach ($db->selects as [$sql]) {
+            $this->assertStringNotContainsString('OFFSET', $sql);
+            $this->assertStringNotContainsString('COUNT(', $sql);
+        }
     }
 
     #[Test]
@@ -429,6 +674,7 @@ final class JobServiceTest extends A2mTestCase
         $api->handle('run', ['jobId' => $jobId], $this->blogId, 1);
         $again = $api->handle('requeue', ['jobId' => $jobId], $this->blogId, 1);
         $this->assertSame(0, $again['requeued']);
+        $this->assertTrue($again['done']);
         $this->assertSame('completed', $this->child($again, 'job')['status']);
     }
 
@@ -439,7 +685,7 @@ final class JobServiceTest extends A2mTestCase
         $job = $this->service()->create($this->blogId, 1, ['chunkSize' => 50]);
         $this->scan($job->id);
         $this->expectException(\LogicException::class);
-        $this->service()->requeue($job->id, $this->blogId);
+        $this->service()->requeueChunk($job->id, $this->blogId, true)['requeued'];
     }
 
     #[Test]

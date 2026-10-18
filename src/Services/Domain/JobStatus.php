@@ -15,6 +15,8 @@ enum JobStatus: string
     case Failed = 'failed';
     case RollingBack = 'rolling_back';
     case RolledBack = 'rolled_back';
+    /** 確定済み（ロールバック用のスナップショットを捨てた。元には戻せない） */
+    case Finalized = 'finalized';
 
     /** 実行（run）を開始・再開できる状態か */
     public function canRun(): bool

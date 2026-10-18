@@ -25,6 +25,14 @@ final class SchemaMigrationTest extends TestCase
         return $this->has($db, 'SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?', $table, $name);
     }
 
+    private function dataType(Db $db, string $table, string $name): string
+    {
+        return Cast::str($db->one(
+            'SELECT DATA_TYPE FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?',
+            [DB_PREFIX . $table, $name]
+        ));
+    }
+
     private function index(Db $db, string $table, string $name): bool
     {
         return $this->has($db, 'SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?', $table, $name);
@@ -57,6 +65,9 @@ final class SchemaMigrationTest extends TestCase
             $this->assertSame(sha1('001/日本語.jpg'), $db->one('SELECT map_path_hash FROM ' . $db->t('a2m_path_map') . ' WHERE map_blog_id = 7'));
             $this->assertTrue($this->column($db, 'a2m_item', 'item_cleanup'));
             $this->assertTrue($this->column($db, 'a2m_job', 'job_scan_cursor'));
+            $this->assertTrue($this->index($db, 'a2m_item', 'job_summary'));
+            $this->assertTrue($this->index($db, 'a2m_item', 'job_item'));
+            $this->assertSame('text', $this->dataType($db, 'a2m_item', 'item_media_ids'));
         } finally {
             $schema->uninstall();
             $schema->install();
@@ -70,5 +81,8 @@ final class SchemaMigrationTest extends TestCase
         $this->assertTrue($this->column($db, 'a2m_path_map', 'map_path_hash'));
         $this->assertTrue($this->index($db, 'a2m_path_map', 'blog_path_hash'));
         $this->assertTrue($this->column($db, 'a2m_item', 'item_cleanup'));
+        $this->assertTrue($this->index($db, 'a2m_item', 'job_summary'), '種類別の集計用のインデックス');
+        $this->assertTrue($this->index($db, 'a2m_item', 'job_item'), 'CSV などを item_id 順に読む用のインデックス');
+        $this->assertSame('text', $this->dataType($db, 'a2m_item', 'item_media_ids'), 'メディア ID が多いユニットでも切り詰めない');
     }
 }

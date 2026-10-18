@@ -22,8 +22,12 @@ final class FakeMediaHelper extends Helper
 
     public bool $failRegister = false;
 
+    /** previewRegisterLocalFile（ファイル全体のハッシュ計算を伴う）を呼んだ回数 */
+    public int $previewCalls = 0;
+
     public function previewRegisterLocalFile(string $filepath, string $filename): MediaImportPreview
     {
+        $this->previewCalls++;
         $hash = hash_file('sha256', $filepath);
         $existing = Database::query([
             'sql' => 'SELECT media_id FROM ' . DB_PREFIX . 'media WHERE media_hash = ? ORDER BY media_id LIMIT 1',

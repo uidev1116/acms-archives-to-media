@@ -103,6 +103,52 @@ final class ScannersTest extends A2mTestCase
     }
 
     #[Test]
+    public function ユニットのスキャンは主キーの順で読み_並べ替えを必要としない(): void
+    {
+        $this->insertColumn('p1', 'image', ['column_field_2' => '1.jpg']);
+        $this->insertColumn('p2', 'image', ['column_field_2' => '2.jpg']);
+        $db = new \Acms\Plugins\ArchivesToMedia\Tests\Support\RecordingDb();
+        (new UnitImageScanner($db, $this->blogScope()))->scan(JobOptions::fromArray(['includeRevisions' => true]), $this->blogId, null, 1);
+
+        $this->assertNotSame([], $db->selects);
+        foreach ($db->selects as [$sql, $params]) {
+            if (!str_contains($sql, 'ORDER BY')) {
+                continue;
+            }
+            $this->assertStringNotContainsString('BINARY c.column_id', $sql);
+            foreach ($this->db->all('EXPLAIN ' . $sql, $params) as $plan) {
+                $this->assertStringNotContainsString('filesort', \Acms\Plugins\ArchivesToMedia\Services\Support\Cast::str($plan['Extra'] ?? ''), $sql);
+            }
+        }
+    }
+
+    #[Test]
+    public function フィールドのスキャンは全行の計算キーで並べ替えず_カーソルにキー一覧を持たない(): void
+    {
+        for ($i = 1; $i <= 3; $i++) {
+            $this->insertImageField('f' . $i, "001/{$i}.jpg", 1, '', ['field_eid' => $this->createTestEntry($this->blogId, null)]);
+        }
+        $db = new \Acms\Plugins\ArchivesToMedia\Tests\Support\RecordingDb();
+        $scanner = new FieldImageScanner($db, $this->blogScope(), new FieldStore($this->db), new FieldNameResolver());
+        $res = $scanner->scan(JobOptions::fromArray(['includeRevisions' => true]), $this->blogId, null, 1);
+
+        $this->assertNotNull($res['nextCursor']);
+        $this->assertStringNotContainsString('keys', $res['nextCursor']);
+        $this->assertLessThan(200, strlen($res['nextCursor']));
+        foreach ($db->selects as [$sql]) {
+            $this->assertStringNotContainsString('HAVING', $sql);
+            $this->assertStringNotContainsString('CONCAT(', $sql);
+            $this->assertStringNotContainsString('SELECT DISTINCT field_key', $sql);
+            // 所属 ID の昇順は GROUP BY + ORDER BY の素のカラムで行う（DISTINCT だと一時テーブルになる）。
+            // 実行計画はテーブルの大きさで変わる（テスト用 DB は小さい）ので、ここではクエリの形だけを確かめる。
+            if (str_contains($sql, ' AS oid ')) {
+                $this->assertStringContainsString('GROUP BY', $sql);
+                $this->assertStringNotContainsString('DISTINCT', $sql);
+            }
+        }
+    }
+
+    #[Test]
     public function 多言語ユニットは言語ごとのパスを持つ(): void
     {
         $this->insertColumn('ml', 'image', ['column_field_2' => '001/ja.jpg:acms_unit_delimiter:001/en.jpg']);
@@ -359,7 +405,32 @@ final class ScannersTest extends A2mTestCase
     }
 
     #[Test]
-    public function フィールドの対象キー一覧は最初のチャンクで調べ_カーソルで引き継ぐ(): void
+    public function 対象になる候補が無い所属ばかりでも_1回の呼び出しで歩き続けず_途中でカーソルを返す(): void
+    {
+        // ファイルフィールドばかり（画像フィールドのスキャナは全部見送る）
+        for ($i = 1; $i <= 45; $i++) {
+            $eid = $this->createTestEntry($this->blogId, null);
+            $this->insertFileField('doc', "f/{$i}.pdf", "{$i}.pdf", '', 1, ['field_eid' => $eid]);
+        }
+        $db = new \Acms\Plugins\ArchivesToMedia\Tests\Support\RecordingDb();
+        $scanner = new FieldImageScanner($db, $this->blogScope(), new FieldStore($this->db), new FieldNameResolver());
+
+        $res = $scanner->scan(JobOptions::defaults(), $this->blogId, null, 5);
+
+        $this->assertSame([], $res['candidates']);
+        $this->assertNotNull($res['nextCursor'], '候補が 0 件でも、まだ続きがあるならカーソルを返して呼び出し側に時間を確かめさせる');
+        $this->assertLessThan(100, count($db->selects), '45 所属を全部歩かない: ' . count($db->selects));
+
+        // 続けて呼べば、最後まで進んで 0 件で終わる（無限ループにならない）
+        $cursor = $res['nextCursor'];
+        for ($i = 0; $i < 50 && $cursor !== null; $i++) {
+            $cursor = $scanner->scan(JobOptions::defaults(), $this->blogId, $cursor, 5)['nextCursor'];
+        }
+        $this->assertNull($cursor);
+    }
+
+    #[Test]
+    public function 対象外のフィールドは除き_チャンクを分けても同じ結果になる(): void
     {
         $this->insertImageField('hero', 'a/1.jpg');
         $this->insertImageField('skipme', 'a/2.jpg');
@@ -367,18 +438,26 @@ final class ScannersTest extends A2mTestCase
         $this->insertImageField('gallery', 'a/4.jpg', 2);
         $options = JobOptions::fromArray(['field' => ['excludeKeys' => ['skipme']]]);
 
-        $first = $this->fieldImage()->scan($options, $this->blogId, null, 1);
-        $this->assertNotNull($first['nextCursor']);
-        $cursor = json_decode($first['nextCursor'], true);
-        $this->assertIsArray($cursor);
-        $keys = $cursor['keys'];
-        $this->assertIsArray($keys);
-        sort($keys);
-        $this->assertSame(['gallery@path', 'hero@path'], $keys, '対象外のキーは含まれない');
+        foreach ([1, 2, 100] as $limit) {
+            $names = array_map(static fn (Candidate $c): string => $c->locator instanceof FieldLocator ? $c->locator->key . ':' . $c->locator->sort : '', $this->drain($this->fieldImage(), $options, $limit));
+            sort($names);
+            $this->assertSame(['gallery:1', 'gallery:2', 'hero:1'], $names, 'limit=' . $limit);
+        }
+    }
 
-        // 続きのチャンクでも、同じ結果が得られる
-        $names = array_map(static fn (Candidate $c): string => $c->locator instanceof \Acms\Plugins\ArchivesToMedia\Services\Domain\Locator\FieldLocator ? $c->locator->key : '', $this->drain($this->fieldImage(), $options, 1));
-        sort($names);
-        $this->assertSame(['gallery', 'gallery', 'hero'], $names);
+    #[Test]
+    public function 複数の所属をまたぐフィールドも_カーソルで取りこぼさない(): void
+    {
+        $e2 = $this->createTestEntry($this->blogId, null);
+        $this->insertImageField('hero', 'a/1.jpg');
+        $this->insertImageField('hero', 'a/2.jpg', 1, '', ['field_eid' => $e2]);
+        $this->insertImageField('logo', 'a/3.jpg', 1, '', ['field_eid' => null, 'field_bid' => $this->blogId]);
+        $this->insertImageField('cat', 'a/4.jpg', 1, '', ['field_eid' => null, 'field_cid' => $this->createTestCategory($this->blogId)]);
+
+        foreach ([1, 2, 100] as $limit) {
+            $paths = array_map(static fn (Candidate $c): string => $c->sourcePaths[0], $this->drain($this->fieldImage(), null, $limit));
+            sort($paths);
+            $this->assertSame(['a/1.jpg', 'a/2.jpg', 'a/3.jpg', 'a/4.jpg'], $paths, 'limit=' . $limit);
+        }
     }
 }

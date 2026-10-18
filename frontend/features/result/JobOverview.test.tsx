@@ -45,6 +45,7 @@ function setup(
     onCsv: () => void;
     onRequeue: () => void;
     onCleanup: () => void;
+    onFinalize: () => void;
   }> = {},
 ) {
   const props = {
@@ -52,6 +53,7 @@ function setup(
     onCsv: vi.fn(),
     onRequeue: vi.fn(),
     onCleanup: vi.fn(),
+    onFinalize: vi.fn(),
     ...handlers,
   };
   render(
@@ -132,6 +134,67 @@ describe('JobOverview', () => {
     setup({ ...detail({ status: 'paused' }), cleanup: { cleanable: 2, cleaned: 0 } });
     expect(
       screen.queryByRole('button', { name: '旧データを削除（クリーンアップ）' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('完了したジョブは、変換を確定（ロールバック用の記録を削除）できる', async () => {
+    const p = setup(detail());
+    await userEvent.click(screen.getByRole('button', { name: '変換を確定する' }));
+    expect(p.onFinalize).toHaveBeenCalled();
+  });
+
+  it('完了していない・変換済みが無いジョブには確定を出さない', () => {
+    setup(detail({ status: 'paused' }));
+    expect(screen.queryByRole('button', { name: '変換を確定する' })).not.toBeInTheDocument();
+  });
+
+  it('確定済みのジョブはロールバックなどを出さず_確定済みであることを示す', () => {
+    setup(detail({ status: 'finalized' }));
+    expect(screen.getByText('確定済み')).toBeInTheDocument();
+    expect(screen.getByText(/ロールバックできません/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'ロールバック' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '変換を確定する' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'スキップ・エラー分を再実行' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('ロールバック済みでも、戻せなかったアイテムがあれば知らせる', () => {
+    setup(detail({ status: 'rolled_back' }, { rolled_back: 3, error: 2 }));
+    expect(screen.getByRole('alert')).toHaveTextContent('2 件は戻せていません');
+  });
+
+  it('ロールバック済みで全部戻っていれば知らせない', () => {
+    setup(detail({ status: 'rolled_back' }, { rolled_back: 3 }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('ロールバック中のジョブは、変換済みが 0 件でも（メディア削除の途中など）ロールバックを再開できる', async () => {
+    const p = setup(detail({ status: 'rolling_back' }, { rolled_back: 5 }));
+    await userEvent.click(screen.getByRole('button', { name: 'ロールバック' }));
+    expect(p.onRollback).toHaveBeenCalled();
+  });
+
+  it('失敗したジョブでも、ロールバックの途中なら（戻し済みがある）ロールバックを再開できる', () => {
+    setup(detail({ status: 'failed' }, { rolled_back: 4 }));
+    expect(screen.getByRole('button', { name: 'ロールバック' })).toBeInTheDocument();
+  });
+
+  it('確定済みで回収が途中のジョブは、記録の回収の続きを実行できる', async () => {
+    const p = setup({ ...detail({ status: 'finalized' }), finalizing: true });
+    await userEvent.click(screen.getByRole('button', { name: '記録の回収を続ける' }));
+    expect(p.onFinalize).toHaveBeenCalled();
+  });
+
+  it('回収が済んだ確定済みのジョブには、続きのボタンを出さない', () => {
+    setup({ ...detail({ status: 'finalized' }), finalizing: false });
+    expect(screen.queryByRole('button', { name: '記録の回収を続ける' })).not.toBeInTheDocument();
+  });
+
+  it('スキップ・エラー分の再実行は、実行できる状態（完了・一時停止・実行中・失敗）のときだけ出す', () => {
+    setup(detail({ status: 'rolled_back' }, { rolled_back: 3, error: 2 }));
+    expect(
+      screen.queryByRole('button', { name: 'スキップ・エラー分を再実行' }),
     ).not.toBeInTheDocument();
   });
 });

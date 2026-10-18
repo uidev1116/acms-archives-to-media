@@ -1,12 +1,11 @@
 {
     "name": "ablogcms/archives-to-media",
-    "description": "ArchivesToMedia for a-blog cms plugin development, with a PHPUnit setup based on the bundled SamplePlugin",
+    "description": "a-blog cms plugin: bulk-convert archives/ images and files referenced by units and custom fields into media references",
     "type": "project",
     "license": "MIT",
     "authors": [
         {
-            "name": "appleple",
-            "email": "info@appleple.com"
+            "name": "uidev1116"
         }
     ],
     "require": {

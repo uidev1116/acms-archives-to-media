@@ -1,11 +1,13 @@
 import Alert from '@ablogcms/components/alert';
 import Button from '@ablogcms/components/button';
 import { Loading } from '../components/Loading';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '../api/client';
 import { useApi } from '../api/context';
 import { JobOverview } from '../features/result/JobOverview';
 import { CleanupModal } from '../features/result/CleanupModal';
+import { DeleteJobModal } from '../features/result/DeleteJobModal';
+import { FinalizeModal } from '../features/result/FinalizeModal';
 import { RollbackModal } from '../features/result/RollbackModal';
 import { RunStep } from '../features/run/RunStep';
 import type { JobDetail } from '../types';
@@ -43,6 +45,9 @@ export function JobPanel({ jobId, onChanged, allowDelete = false, onDeleted }: P
   const [mode, setMode] = useState<Mode>({ type: 'view' });
   const [rollbackOpen, setRollbackOpen] = useState(false);
   const [cleanupOpen, setCleanupOpen] = useState(false);
+  const [finalizeOpen, setFinalizeOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const requeuing = useRef(false);
 
   const load = useCallback(async (): Promise<JobDetail | null> => {
     try {
@@ -66,18 +71,47 @@ export function JobPanel({ jobId, onChanged, allowDelete = false, onDeleted }: P
   }, [load, onChanged]);
 
   const requeue = async () => {
+    if (requeuing.current) return; // 実行中の連打は無視する（並行して繰り返さない）
+    requeuing.current = true;
     setError(null);
     setNotice(null);
     try {
-      const res = await api.call<{ requeued: number }>('requeue', { jobId });
-      if (res.requeued === 0) {
+      // 件数が多いと 1 回では終わらない。サーバーが done を返すまで繰り返す
+      // 最初の呼び出しだけ、前回途中のカーソルを捨てて最初から読ませる
+      let requeued = 0;
+      for (let first = true; ; first = false) {
+        const res = await api.call<{ requeued: number; done?: boolean }>('requeue', {
+          jobId,
+          restart: first,
+        });
+        requeued += res.requeued;
+        if (res.done !== false) break;
+      }
+      if (requeued === 0) {
         setNotice('再実行できるアイテムはありませんでした。');
         return;
       }
       const fresh = await load();
-      setMode({ type: 'run', total: fresh?.counts.pending ?? res.requeued });
+      setMode({ type: 'run', total: fresh?.counts.pending ?? requeued });
     } catch (e) {
       setError(messageOf(e));
+    } finally {
+      requeuing.current = false;
+    }
+  };
+
+  const finalize = async (keepLegacyKeys: boolean) => {
+    setError(null);
+    try {
+      // 件数が多いと 1 回では回収し切れない。サーバーが done を返すまで繰り返す
+      for (;;) {
+        const res = await api.call<{ done?: boolean }>('finalize', { jobId, keepLegacyKeys });
+        if (res.done !== false) break;
+      }
+      await finish();
+    } catch (e) {
+      setError(messageOf(e));
+      await load();
     }
   };
 
@@ -125,6 +159,9 @@ export function JobPanel({ jobId, onChanged, allowDelete = false, onDeleted }: P
             onRequeue={() => void requeue()}
             onRollback={() => setRollbackOpen(true)}
             onCleanup={() => setCleanupOpen(true)}
+            onFinalize={() =>
+              status === 'finalized' ? void finalize(false) : setFinalizeOpen(true)
+            }
           />
           {NOT_SCANNED.has(status) && (
             <Alert variant="warning" role="note">
@@ -132,7 +169,7 @@ export function JobPanel({ jobId, onChanged, allowDelete = false, onDeleted }: P
             </Alert>
           )}
           <div className="acms-admin-a2m-actions">
-            {RUNNABLE.has(status) && (
+            {RUNNABLE.has(status) && (status === 'scanned' || (detail.counts.pending ?? 0) > 0) && (
               <Button
                 variant="primary"
                 onClick={() => setMode({ type: 'run', total: detail.counts.pending ?? 0 })}
@@ -140,7 +177,7 @@ export function JobPanel({ jobId, onChanged, allowDelete = false, onDeleted }: P
                 実行を再開
               </Button>
             )}
-            {allowDelete && <Button onClick={() => void remove()}>ジョブを削除</Button>}
+            {allowDelete && <Button onClick={() => setDeleteOpen(true)}>ジョブを削除</Button>}
           </div>
         </>
       )}
@@ -174,6 +211,27 @@ export function JobPanel({ jobId, onChanged, allowDelete = false, onDeleted }: P
         onConfirm={() => {
           setCleanupOpen(false);
           setMode({ type: 'cleanup', total: detail.cleanup?.cleanable ?? 0 });
+        }}
+      />
+
+      <DeleteJobModal
+        isOpen={deleteOpen}
+        jobId={jobId}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={() => {
+          setDeleteOpen(false);
+          void remove();
+        }}
+      />
+
+      <FinalizeModal
+        isOpen={finalizeOpen}
+        count={converted}
+        legacyCount={detail.cleanup?.cleanable ?? 0}
+        onClose={() => setFinalizeOpen(false)}
+        onConfirm={(keepLegacyKeys) => {
+          setFinalizeOpen(false);
+          void finalize(keepLegacyKeys);
         }}
       />
 

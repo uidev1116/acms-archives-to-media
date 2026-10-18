@@ -142,6 +142,32 @@ describe('JobPanel', () => {
     expect(client.calls.map((c) => c.action).slice(0, 3)).toEqual(['job', 'requeue', 'job']);
   });
 
+  it('スキップ分が多いときは_done になるまで requeue を繰り返してから run する', async () => {
+    const client = fakeClient({
+      job: [
+        detail({ skipped: 3 }, { converted: 2, skipped: 3 }),
+        detail({ status: 'paused' }, { converted: 2, pending: 3 }),
+        detail(),
+      ],
+      requeue: [
+        { requeued: 2, done: false, job: detail({ status: 'paused' }).job },
+        { requeued: 1, done: true, job: detail({ status: 'paused' }).job },
+      ],
+      run: done(),
+    });
+    mount(client);
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'スキップ・エラー分を再実行' }),
+    );
+    await waitFor(() => expect(client.calls.map((c) => c.action)).toContain('run'));
+    expect(client.calls.map((c) => c.action).slice(0, 4)).toEqual([
+      'job',
+      'requeue',
+      'requeue',
+      'job',
+    ]);
+  });
+
   it('再実行するものが無ければお知らせだけ出す', async () => {
     const client = fakeClient({
       job: detail({ skipped: 1 }, { converted: 2, skipped: 1 }),
@@ -173,7 +199,7 @@ describe('JobPanel', () => {
     expect(client.exportCsv).toHaveBeenCalledWith(7);
   });
 
-  it('削除できる（削除を許可した画面だけ）', async () => {
+  it('削除できる（削除を許可した画面だけ）: 確認ダイアログで同意してから delete を呼ぶ', async () => {
     const onDeleted = vi.fn();
     const client = fakeClient({
       job: detail({ status: 'rolled_back' }, { rolled_back: 3 }),
@@ -181,7 +207,20 @@ describe('JobPanel', () => {
     });
     mount(client, { allowDelete: true, onDeleted });
     await userEvent.click(await screen.findByRole('button', { name: 'ジョブを削除' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(client.calls.map((c) => c.action)).not.toContain('delete');
+    await userEvent.click(within(dialog).getByRole('button', { name: '削除する' }));
     await waitFor(() => expect(onDeleted).toHaveBeenCalled());
+    expect(client.calls.find((c) => c.action === 'delete')?.params).toEqual({ jobId: 7 });
+  });
+
+  it('削除の確認をキャンセルしたら何もしない', async () => {
+    const client = fakeClient({ job: detail({ status: 'rolled_back' }, { rolled_back: 3 }) });
+    mount(client, { allowDelete: true });
+    await userEvent.click(await screen.findByRole('button', { name: 'ジョブを削除' }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'キャンセル' }));
+    expect(client.calls.map((c) => c.action)).not.toContain('delete');
   });
 
   it('削除に失敗したらエラーを表示する', async () => {
@@ -191,6 +230,9 @@ describe('JobPanel', () => {
     });
     mount(client, { allowDelete: true });
     await userEvent.click(await screen.findByRole('button', { name: 'ジョブを削除' }));
+    await userEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: '削除する' }),
+    );
     expect(await screen.findByRole('alert')).toHaveTextContent('先にロールバック');
   });
 
@@ -225,5 +267,136 @@ describe('JobPanel', () => {
 
     expect(await screen.findByText('旧データ削除済み: 3 件')).toBeInTheDocument();
     expect(client.calls.find((c) => c.action === 'cleanup')?.params).toEqual({ jobId: 7 });
+  });
+
+  it('変換の確定: 理解したことを確認してから finalize を呼び、概要を読み直す', async () => {
+    const client = fakeClient({
+      job: [detail({}, { converted: 3 }), detail({ status: 'finalized' }, { converted: 3 })],
+      finalize: { done: true, job: detail({ status: 'finalized' }).job },
+    });
+    mount(client);
+
+    await userEvent.click(await screen.findByRole('button', { name: '変換を確定する' }));
+    const dialog = await screen.findByRole('dialog');
+    const ok = within(dialog).getByRole('button', { name: '確定する' });
+    expect(ok).toBeDisabled();
+    await userEvent.click(
+      within(dialog).getByLabelText('ロールバックできなくなることを理解しました'),
+    );
+    await userEvent.click(ok);
+
+    expect(await screen.findByText('確定済み')).toBeInTheDocument();
+    expect(client.calls.find((c) => c.action === 'finalize')?.params).toEqual({
+      jobId: 7,
+      keepLegacyKeys: false,
+    });
+  });
+
+  it('確定は、サーバーが done を返すまで繰り返す', async () => {
+    const client = fakeClient({
+      job: [detail({}, { converted: 3 }), detail({ status: 'finalized' }, { converted: 3 })],
+      finalize: [
+        { done: false, job: detail({ status: 'finalized' }).job },
+        { done: true, job: detail({ status: 'finalized' }).job },
+      ],
+    });
+    mount(client);
+    await userEvent.click(await screen.findByRole('button', { name: '変換を確定する' }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(
+      within(dialog).getByLabelText('ロールバックできなくなることを理解しました'),
+    );
+    await userEvent.click(within(dialog).getByRole('button', { name: '確定する' }));
+    expect(await screen.findByText('確定済み')).toBeInTheDocument();
+    expect(client.calls.filter((c) => c.action === 'finalize')).toHaveLength(2);
+  });
+
+  it('旧データが残っているときは、残したまま確定することの確認も求め、keepLegacyKeys を送る', async () => {
+    const client = fakeClient({
+      job: [
+        { ...detail({}, { converted: 3 }), cleanup: { cleanable: 3, cleaned: 0 } },
+        detail({ status: 'finalized' }, { converted: 3 }),
+      ],
+      finalize: { done: true, job: detail({ status: 'finalized' }).job },
+    });
+    mount(client);
+    await userEvent.click(await screen.findByRole('button', { name: '変換を確定する' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/旧データのクリーンアップが済んでいない/)).toBeInTheDocument();
+    await userEvent.click(
+      within(dialog).getByLabelText('ロールバックできなくなることを理解しました'),
+    );
+    expect(within(dialog).getByRole('button', { name: '確定する' })).toBeDisabled();
+    await userEvent.click(
+      within(dialog).getByLabelText(
+        '旧データを残したまま確定し、あとからクリーンアップできなくなることを理解しました',
+      ),
+    );
+    await userEvent.click(within(dialog).getByRole('button', { name: '確定する' }));
+    await screen.findByText('確定済み');
+    expect(client.calls.find((c) => c.action === 'finalize')?.params).toEqual({
+      jobId: 7,
+      keepLegacyKeys: true,
+    });
+  });
+
+  it('再実行の最初の呼び出しだけ restart を付け、再実行中のボタンの連打は無視する', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const client = fakeClient({
+      job: [
+        detail({ skipped: 3 }, { converted: 2, skipped: 3 }),
+        detail({ status: 'paused' }, { converted: 2, pending: 3 }),
+        detail(),
+      ],
+      requeue: async (params: Record<string, unknown>) => {
+        await gate;
+        return params.restart === true
+          ? { requeued: 2, done: false, job: detail({ status: 'paused' }).job }
+          : { requeued: 1, done: true, job: detail({ status: 'paused' }).job };
+      },
+      run: done(),
+    });
+    mount(client);
+    const button = await screen.findByRole('button', { name: 'スキップ・エラー分を再実行' });
+    await userEvent.click(button);
+    await userEvent.click(button);
+    release();
+    await waitFor(() => expect(client.calls.map((c) => c.action)).toContain('run'));
+    const requeues = client.calls.filter((c) => c.action === 'requeue');
+    expect(requeues.map((c) => c.params.restart)).toEqual([true, false]);
+  });
+
+  it('失敗したジョブでも、実行待ちが無ければ「実行を再開」は出さない（ロールバック途中の失敗など）', async () => {
+    mount(fakeClient({ job: detail({ status: 'failed' }, { rolled_back: 3 }) }));
+    await screen.findByText('失敗');
+    expect(screen.queryByRole('button', { name: '実行を再開' })).not.toBeInTheDocument();
+  });
+
+  it('確定の続き: 確認なしで finalize を done まで繰り返す', async () => {
+    const client = fakeClient({
+      job: [
+        { ...detail({ status: 'finalized' }, { converted: 3 }), finalizing: true },
+        { ...detail({ status: 'finalized' }, { converted: 3 }), finalizing: false },
+      ],
+      finalize: [
+        { done: false, job: detail({ status: 'finalized' }).job },
+        { done: true, job: detail({ status: 'finalized' }).job },
+      ],
+    });
+    mount(client);
+    await userEvent.click(await screen.findByRole('button', { name: '記録の回収を続ける' }));
+    await waitFor(() =>
+      expect(client.calls.filter((c) => c.action === 'finalize')).toHaveLength(2),
+    );
+  });
+
+  it('確定の確認ダイアログは、スキップ分の再実行もできなくなることを伝える', async () => {
+    mount(fakeClient({ job: detail({}, { converted: 3, skipped: 1 }) }));
+    await userEvent.click(await screen.findByRole('button', { name: '変換を確定する' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/スキップ・エラー分の再実行/)).toBeInTheDocument();
   });
 });

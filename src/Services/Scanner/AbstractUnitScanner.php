@@ -15,6 +15,9 @@ use Acms\Plugins\ArchivesToMedia\Services\Support\UnitData;
 /**
  * column（オプションで column_rev）を column_id 順のキーセットページングで読む。
  * OFFSET は使わない。
+ *
+ * 並び順と比較は column_id の素のカラムで行う（BINARY を付けると主キーのインデックスが使えず、
+ * チャンクごとに全件の並べ替えになる）。column_id は主キーなので、照合順序のもとで一意＝全順序になる。
  */
 abstract class AbstractUnitScanner implements ScannerInterface
 {
@@ -82,13 +85,13 @@ abstract class AbstractUnitScanner implements ScannerInterface
         array_push($params, $this->typePrefix(), $this->db->escapeLike($this->typePrefix()) . '\\_%');
 
         if ($table === 'column_rev') {
-            $where .= ' AND (BINARY c.column_id > BINARY ? OR (BINARY c.column_id = BINARY ? AND c.column_rev_id > ?))';
+            $where .= ' AND (c.column_id > ? OR (c.column_id = ? AND c.column_rev_id > ?))';
             array_push($params, $lastId, $lastId, $lastRev);
-            $order = 'BINARY c.column_id, c.column_rev_id';
+            $order = 'c.column_id, c.column_rev_id';
         } else {
-            $where .= ' AND BINARY c.column_id > BINARY ?';
+            $where .= ' AND c.column_id > ?';
             $params[] = $lastId;
-            $order = 'BINARY c.column_id';
+            $order = 'c.column_id';
         }
 
         return $this->db->all(

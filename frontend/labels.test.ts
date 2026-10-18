@@ -21,6 +21,7 @@ describe('labels', () => {
       failed: 'danger',
       rolling_back: 'info',
       rolled_back: 'warning',
+      finalized: 'success',
     };
     for (const [status, variant] of Object.entries(expected)) {
       expect(jobStatusVariant(status as JobStatus)).toBe(variant);
