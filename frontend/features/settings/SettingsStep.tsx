@@ -3,6 +3,7 @@ import Button from '@ablogcms/components/button';
 import Checkbox from '@ablogcms/components/checkbox';
 import Fieldset from '@ablogcms/components/fieldset';
 import Input from '@ablogcms/components/input';
+import { HStack } from '@ablogcms/components/stack';
 import Modal, { ModalBody, ModalFooter, ModalHeader } from '@ablogcms/components/modal';
 import Radio from '@ablogcms/components/radio';
 import Select from '@ablogcms/components/select';
@@ -307,16 +308,18 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
           </p>
         </ModalBody>
         <ModalFooter>
-          <Button onClick={() => setConfirmSame(false)}>キャンセル</Button>
-          <Button
-            variant="primary"
-            onClick={() => {
-              setConfirmSame(false);
-              onSubmit(toJobOptions(value));
-            }}
-          >
-            理解して続ける
-          </Button>
+          <HStack spacing="0.5rem" justify="end">
+            <Button onClick={() => setConfirmSame(false)}>キャンセル</Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                setConfirmSame(false);
+                onSubmit(toJobOptions(value));
+              }}
+            >
+              理解して続ける
+            </Button>
+          </HStack>
         </ModalFooter>
       </Modal>
     </section>

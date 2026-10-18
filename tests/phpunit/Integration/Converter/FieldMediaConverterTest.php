@@ -311,4 +311,36 @@ final class FieldMediaConverterTest extends A2mTestCase
         $this->db->rollBack();
         $this->addToAssertionCount(1);
     }
+
+    #[Test]
+    public function カスタムユニット内のフィールドグループにも書き込み先が追記され_ロールバックで完全に戻る(): void
+    {
+        $this->insertColumn('cu1', 'custom');
+        $over = ['field_eid' => null, 'field_unit_id' => 'cu1'];
+        $this->insertImageField('hero', '001/a.jpg', 1, 'alt', $over);
+        $this->insertField('@gal', 'caption', 1, $over + ['field_search' => 'off']);
+        $this->insertField('@gal', 'hero', 2, $over + ['field_search' => 'off']);
+        // 別のユニットのグループには触れない
+        $this->insertColumn('cu2', 'custom');
+        $this->insertField('@gal', 'hero', 1, ['field_eid' => null, 'field_unit_id' => 'cu2', 'field_search' => 'off']);
+        $snapshot = fn (): array => $this->db->all('SELECT * FROM ' . $this->db->t('field') . ' WHERE field_unit_id IN (\'cu1\', \'cu2\') ORDER BY field_unit_id, field_key, field_sort, field_value');
+        $original = $snapshot();
+
+        $loc = new FieldLocator('hero', 1, 'unit_id', 'cu1', null, $this->blogId);
+        $cand = new Candidate(TargetType::FieldImage, $loc, 'unit', 'cu1', $this->blogId, ['001/a.jpg']);
+        $conv = $this->fieldConverter();
+        $opts = JobOptions::defaults();
+        $before = $conv->snapshot($loc, $opts);
+        $after = $conv->apply($cand, [42], $opts);
+
+        $groups = $this->db->all('SELECT field_unit_id, field_value FROM ' . $this->db->t('field') . ' WHERE field_key = \'@gal\' ORDER BY field_unit_id, field_sort');
+        $this->assertSame(
+            [['cu1', 'caption'], ['cu1', 'hero'], ['cu1', 'hero_media'], ['cu2', 'hero']],
+            array_map(static fn (array $r): array => [Cast::str($r['field_unit_id']), Cast::str($r['field_value'])], $groups),
+            'cu1 のグループにだけ追記される'
+        );
+
+        $conv->restore($loc, (array) $before, $after, $opts);
+        $this->assertEquals($original, $snapshot());
+    }
 }

@@ -1,5 +1,6 @@
 import Button from '@ablogcms/components/button';
 import Checkbox from '@ablogcms/components/checkbox';
+import { HStack } from '@ablogcms/components/stack';
 import Modal, { ModalBody, ModalFooter, ModalHeader } from '@ablogcms/components/modal';
 import { useState } from 'react';
 
@@ -30,10 +31,12 @@ export function RollbackModal({ isOpen, count, onClose, onConfirm }: Props) {
         </p>
       </ModalBody>
       <ModalFooter>
-        <Button onClick={onClose}>キャンセル</Button>
-        <Button variant="primary" onClick={() => onConfirm(deleteMedia)}>
-          ロールバックする
-        </Button>
+        <HStack spacing="0.5rem" justify="end">
+          <Button onClick={onClose}>キャンセル</Button>
+          <Button variant="primary" onClick={() => onConfirm(deleteMedia)}>
+            ロールバックする
+          </Button>
+        </HStack>
       </ModalFooter>
     </Modal>
   );

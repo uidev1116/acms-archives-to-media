@@ -130,12 +130,12 @@ docker exec -w /var/www/plugins/ArchivesToMedia \
 |---|---|
 | `composer check`（web コンテナ、テスト用 DB `db_acms_test`）: phpcs | エラー 0 |
 | 〃 PHPStan（level max + strict-rules、src と tests） | エラー 0 |
-| 〃 PHPUnit（Unit + Integration） | **290 tests / 1213 assertions すべて成功** |
+| 〃 PHPUnit（Unit + Integration） | **292 tests / 1220 assertions すべて成功** |
 | PHP カバレッジ（pcov、`src/` 全体） | **行 95.0%**（2044 / 2152 行。Classes 64% は POST ハンドラ・例外クラス等のため。ロジック層は 90〜100%） |
 | `npm run build` | `src/assets/dist/archives-to-media.js` 約 480 KB（CSS は出力されない） |
 | `npm run lint`（ESLint + Prettier + Stylelint） | エラー 0 |
 | `npx tsc --noEmit` | エラー 0 |
-| `npm run test:coverage`（Vitest） | **133 tests 成功。Statements 99.5% / Branches 94.7% / Functions 93.8% / Lines 99.5%**（閾値 90%） |
+| `npm run test:coverage`（Vitest） | **134 tests 成功。Statements 99.5% / Branches 94.7% / Functions 93.8% / Lines 99.5%**（閾値 90%） |
 | `npm run e2e`（Playwright、ローカル） | **4 tests 成功**（通し変換とロールバック / 一時停止と再開 / ジョブ詳細と CSV / トークン無し POST の拒否） |
 | GitHub Actions `Test` | quality / phpunit（PHP 8.1〜8.5）/ frontend がすべて成功（最終コミットの結果は §8 参照） |
 

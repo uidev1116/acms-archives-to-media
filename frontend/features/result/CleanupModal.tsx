@@ -1,5 +1,6 @@
 import Button from '@ablogcms/components/button';
 import Checkbox from '@ablogcms/components/checkbox';
+import { HStack } from '@ablogcms/components/stack';
 import Modal, { ModalBody, ModalFooter, ModalHeader } from '@ablogcms/components/modal';
 import { useState } from 'react';
 
@@ -39,24 +40,26 @@ export function CleanupModal({ isOpen, count, onClose, onConfirm }: Props) {
         <p className="acms-admin-a2m-muted">archives の元ファイルは削除しません。</p>
       </ModalBody>
       <ModalFooter>
-        <Button
-          onClick={() => {
-            setMigrated(false);
-            onClose();
-          }}
-        >
-          キャンセル
-        </Button>
-        <Button
-          variant="primary"
-          disabled={!migrated}
-          onClick={() => {
-            setMigrated(false);
-            onConfirm();
-          }}
-        >
-          旧データを削除する
-        </Button>
+        <HStack spacing="0.5rem" justify="end">
+          <Button
+            onClick={() => {
+              setMigrated(false);
+              onClose();
+            }}
+          >
+            キャンセル
+          </Button>
+          <Button
+            variant="primary"
+            disabled={!migrated}
+            onClick={() => {
+              setMigrated(false);
+              onConfirm();
+            }}
+          >
+            旧データを削除する
+          </Button>
+        </HStack>
       </ModalFooter>
     </Modal>
   );
