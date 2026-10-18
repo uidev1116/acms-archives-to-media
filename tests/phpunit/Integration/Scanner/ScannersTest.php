@@ -357,4 +357,28 @@ final class ScannersTest extends A2mTestCase
             $this->assertSame(['a.jpg', 'b.jpg'], $paths, 'limit=' . $limit);
         }
     }
+
+    #[Test]
+    public function フィールドの対象キー一覧は最初のチャンクで調べ_カーソルで引き継ぐ(): void
+    {
+        $this->insertImageField('hero', 'a/1.jpg');
+        $this->insertImageField('skipme', 'a/2.jpg');
+        $this->insertImageField('gallery', 'a/3.jpg', 1);
+        $this->insertImageField('gallery', 'a/4.jpg', 2);
+        $options = JobOptions::fromArray(['field' => ['excludeKeys' => ['skipme']]]);
+
+        $first = $this->fieldImage()->scan($options, $this->blogId, null, 1);
+        $this->assertNotNull($first['nextCursor']);
+        $cursor = json_decode($first['nextCursor'], true);
+        $this->assertIsArray($cursor);
+        $keys = $cursor['keys'];
+        $this->assertIsArray($keys);
+        sort($keys);
+        $this->assertSame(['gallery@path', 'hero@path'], $keys, '対象外のキーは含まれない');
+
+        // 続きのチャンクでも、同じ結果が得られる
+        $names = array_map(static fn (Candidate $c): string => $c->locator instanceof \Acms\Plugins\ArchivesToMedia\Services\Domain\Locator\FieldLocator ? $c->locator->key : '', $this->drain($this->fieldImage(), $options, 1));
+        sort($names);
+        $this->assertSame(['gallery', 'gallery', 'hero'], $names);
+    }
 }

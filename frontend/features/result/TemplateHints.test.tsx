@@ -51,4 +51,14 @@ describe('TemplateHints', () => {
     expect(String(writeText.mock.calls[0]?.[0])).toContain('{hero_media@path}');
     expect(await screen.findByText('コピーしました')).toBeInTheDocument();
   });
+
+  it('入力欄はコアのメディアフィールド（js-media-field）の書き方で、種類に応じた data-type を持つ', () => {
+    render(<TemplateHints fieldKeys={{ image: ['hero'], file: ['doc'] }} field={field} />);
+    const blocks = screen.getAllByText(/class="js-media-field"/);
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]).toHaveTextContent('data-type="image"');
+    expect(blocks[0]).toHaveTextContent('class="js-value" name="hero_media"');
+    expect(blocks[1]).toHaveTextContent('data-type="file"');
+    expect(blocks[1]).toHaveTextContent('name="field[]" value="doc_media"');
+  });
 });

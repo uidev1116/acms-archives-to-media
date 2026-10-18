@@ -58,7 +58,8 @@ abstract class AbstractFieldScanner implements ScannerInterface
             }
             $last = $state['t'] === $table ? $state['sk'] : '';
             $batch = max($limit, 50);
-            $keys = $this->targetKeys($table, $options, $blogIds);
+            // 対象キーの一覧は最初のチャンクだけ調べ、続きのチャンクはカーソルに入れて使い回す（毎回の DISTINCT を避ける）
+            $keys = $state['t'] === $table && $state['keys'] !== null ? $state['keys'] : $this->targetKeys($table, $options, $blogIds);
             while ($keys !== [] && count($candidates) < $limit) {
                 $rows = $this->fetch($table, $options, $blogIds, $keys, $last, $batch);
                 if ($rows === []) {
@@ -70,7 +71,7 @@ abstract class AbstractFieldScanner implements ScannerInterface
                     if ($candidate !== null) {
                         $candidates[] = $candidate;
                         if (count($candidates) >= $limit) {
-                            return ['candidates' => $candidates, 'nextCursor' => (string) json_encode(['t' => $table, 'sk' => $last])];
+                            return ['candidates' => $candidates, 'nextCursor' => (string) json_encode(['t' => $table, 'sk' => $last, 'keys' => $keys])];
                         }
                     }
                 }
@@ -214,14 +215,18 @@ abstract class AbstractFieldScanner implements ScannerInterface
     }
 
     /**
-     * @return array{t: string, sk: string}
+     * @return array{t: string, sk: string, keys: list<string>|null}
      */
     private function parseCursor(?string $cursor): array
     {
         $data = $cursor === null ? null : json_decode($cursor, true);
         if (!is_array($data) || !isset($data['t'], $data['sk']) || !in_array($data['t'], ['field', 'field_rev'], true)) {
-            return ['t' => 'field', 'sk' => ''];
+            return ['t' => 'field', 'sk' => '', 'keys' => null];
         }
-        return ['t' => Cast::str($data['t']), 'sk' => Cast::str($data['sk'])];
+        $keys = null;
+        if (isset($data['keys']) && is_array($data['keys'])) {
+            $keys = array_values(array_map(Cast::str(...), $data['keys']));
+        }
+        return ['t' => Cast::str($data['t']), 'sk' => Cast::str($data['sk']), 'keys' => $keys];
     }
 }

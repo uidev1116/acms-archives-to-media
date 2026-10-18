@@ -8,6 +8,20 @@ interface Props {
   field: JobOptions['field'];
 }
 
+function mediaInput(dest: string, kind: 'image' | 'file'): string {
+  const type = kind === 'image' ? 'image' : 'file';
+  return [
+    '<div class="js-media-field">',
+    `  <div class="js-droparea" data-thumbnail="{${dest}@thumbnail}" data-type="${type}" data-thumbnail-type="{${dest}@type}" data-width="200px" data-height="200px"></div>`,
+    '  <p class="js-text acms-admin-text-danger" style="display:none">許可されていないファイルのため挿入できません。</p>',
+    `  <button type="button" class="js-insert acms-admin-btn" data-type="${type}">メディアを選択</button>`,
+    `  <input type="hidden" class="js-value" name="${dest}" value="{${dest}}">`,
+    `  <input type="hidden" name="field[]" value="${dest}">`,
+    `  <input type="hidden" name="${dest}:extension" value="media">`,
+    '</div>',
+  ].join('\n');
+}
+
 function snippets(
   fd: string,
   dest: string,
@@ -17,13 +31,13 @@ function snippets(
     return {
       old: `<img src="%{ARCHIVES_DIR}{${fd}@path}" alt="{${fd}@alt}">`,
       next: `<img src="{${dest}@path}" alt="{${dest}@alt}">`,
-      input: `<input type="hidden" name="${dest}" value="{${dest}}">\n<input type="hidden" name="${dest}:extension" value="media">`,
+      input: mediaInput(dest, kind),
     };
   }
   return {
     old: `<a href="%{ARCHIVES_DIR}{${fd}@path}">{${fd}@baseName}</a>`,
     next: `<a href="{${dest}@path}">{${dest}@name}</a>`,
-    input: `<input type="hidden" name="${dest}" value="{${dest}}">\n<input type="hidden" name="${dest}:extension" value="media">`,
+    input: mediaInput(dest, kind),
   };
 }
 
