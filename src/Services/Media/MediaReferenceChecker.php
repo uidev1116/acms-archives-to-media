@@ -31,6 +31,16 @@ class MediaReferenceChecker
                 return true;
             }
         }
+        // ブロックエディターは本文 HTML の data-mid 属性でメディアを参照する
+        foreach (['column', 'column_rev'] as $table) {
+            $count = Cast::int($this->db->one(
+                'SELECT COUNT(*) FROM ' . $this->db->t($table) . ' WHERE column_type LIKE \'block-editor%\' AND column_field_1 LIKE ?',
+                ['%data-mid="' . $id . '"%']
+            ));
+            if ($count > 0) {
+                return true;
+            }
+        }
         foreach (['field', 'field_rev'] as $table) {
             $count = Cast::int($this->db->one(
                 'SELECT COUNT(*) FROM ' . $this->db->t($table) . ' WHERE field_key LIKE \'%@media\' AND field_value = ?',

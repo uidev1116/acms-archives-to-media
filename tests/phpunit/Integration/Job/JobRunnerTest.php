@@ -16,6 +16,7 @@ use Acms\Plugins\ArchivesToMedia\Services\Job\JobBusyException;
 use Acms\Plugins\ArchivesToMedia\Services\Repository\PathMapRepository;
 use Acms\Plugins\ArchivesToMedia\Tests\Support\A2mTestCase;
 use Acms\Services\Common\Lock;
+use Acms\Plugins\ArchivesToMedia\Tests\Support\RecordingConverter;
 use PHPUnit\Framework\Attributes\Test;
 
 final class JobRunnerTest extends A2mTestCase
@@ -311,6 +312,11 @@ final class JobRunnerTest extends A2mTestCase
                 return $this->inner->currentSourcePaths($locator);
             }
 
+            public function lock(LocatorInterface $locator, JobOptions $options): void
+            {
+                $this->inner->lock($locator, $options);
+            }
+
             public function apply(Candidate $candidate, array $mediaIds, JobOptions $options): array
             {
                 $this->inner->apply($candidate, $mediaIds, $options);
@@ -506,5 +512,19 @@ final class JobRunnerTest extends A2mTestCase
 
         $this->assertSame('ENTRY_LOCKED', $res->log[0]['reason']);
         $this->assertSame('image', $this->columnRow('u1')['column_type']);
+    }
+
+    #[Test]
+    public function 書き込む前に対象行をロックしてから再照合する(): void
+    {
+        $this->seedBasic();
+        $jobId = $this->scannedJob(['targets' => ['unit_image']]);
+        $rec = new RecordingConverter($this->unitImageConverter());
+
+        $res = $this->runner([$rec, $this->unitFileConverter()])->runChunk($this->job($jobId));
+
+        $this->assertSame(1, $res->converted);
+        // 事前確認 → ロック → トランザクション内の再照合 → 書き込み
+        $this->assertSame(['snapshot', 'currentSourcePaths', 'lock', 'snapshot', 'apply'], $rec->calls);
     }
 }

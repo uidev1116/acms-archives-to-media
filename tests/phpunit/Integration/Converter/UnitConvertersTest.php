@@ -250,4 +250,19 @@ final class UnitConvertersTest extends A2mTestCase
         $this->assertTrue($this->fieldConverter()->supports(TargetType::FieldFile));
         $this->assertFalse($this->fieldConverter()->supports(TargetType::UnitFile));
     }
+
+    #[Test]
+    public function 行ロックは本体_リビジョン_存在しない行のどれでも失敗しない(): void
+    {
+        $this->insertColumn('u1', 'image', ['column_field_2' => '001/a.jpg']);
+        $conv = $this->unitImageConverter();
+        $opts = JobOptions::defaults();
+
+        $this->db->begin();
+        $conv->lock(new ColumnLocator('u1'), $opts);
+        $conv->lock(new ColumnLocator('u1', 3), $opts);
+        $conv->lock(new ColumnLocator('ghost'), $opts);
+        $this->db->rollBack();
+        $this->addToAssertionCount(1);
+    }
 }

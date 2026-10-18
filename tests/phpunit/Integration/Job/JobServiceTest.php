@@ -160,7 +160,8 @@ final class JobServiceTest extends A2mTestCase
             fn () => $this->service()->delete($job->id, $other),
             fn () => $this->service()->exclude($job->id, $other, [1], null, true),
             fn () => $this->service()->items($job->id, $other, [], 'item_id', false, 1, 10),
-            fn () => $this->service()->exportCsv($job->id, $other),
+            fn () => $this->service()->writeCsv($job->id, $other, $this->memoryStream()),
+            fn () => $this->service()->ensureAccessible($job->id, $other),
             fn () => $this->service()->get(99999999, $this->blogId),
         ];
         foreach ($calls as $call) {
@@ -308,7 +309,10 @@ final class JobServiceTest extends A2mTestCase
         $this->scan($job->id);
         $this->service()->run($job->id, $this->blogId);
 
-        $csv = $this->service()->exportCsv($job->id, $this->blogId);
+        $stream = $this->memoryStream();
+        $this->service()->writeCsv($job->id, $this->blogId, $stream);
+        rewind($stream);
+        $csv = (string) stream_get_contents($stream);
         $lines = array_values(array_filter(explode("\n", $csv), static fn (string $l): bool => $l !== ''));
 
         $this->assertStringStartsWith("\xEF\xBB\xBF", $csv);
@@ -502,5 +506,17 @@ final class JobServiceTest extends A2mTestCase
         $this->scan($job->id);
         $this->service()->run($job->id, $this->blogId);
         $this->assertSame(['cleanable' => 0, 'cleaned' => 0], $this->service()->get($job->id, $this->blogId)['cleanup']);
+    }
+
+    /**
+     * @return resource
+     */
+    private function memoryStream()
+    {
+        $stream = fopen('php://memory', 'w+');
+        if ($stream === false) {
+            throw new \RuntimeException('stream');
+        }
+        return $stream;
     }
 }

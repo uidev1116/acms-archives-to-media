@@ -29,6 +29,12 @@ interface ConverterInterface
     public function currentSourcePaths(LocatorInterface $locator): ?array;
 
     /**
+     * 対象の行を `SELECT … FOR UPDATE` でロックする（トランザクション内で呼ぶ）。
+     * 直後の再照合から書き込みまでの間に、他のリクエストが同じ行を書き換えないようにするため。行が無くても例外にはしない。
+     */
+    public function lock(LocatorInterface $locator, JobOptions $options): void;
+
+    /**
      * 新規メディアに設定するメタデータ（item_source_paths と同じ順序、同じ個数）
      *
      * @return list<MediaMeta>

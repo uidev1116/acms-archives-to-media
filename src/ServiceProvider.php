@@ -175,7 +175,8 @@ class ServiceProvider extends ACMS_App
      */
     public function uninstall()
     {
-        (new Schema(new Db()))->uninstall();
+        $force = defined('ARCHIVES_TO_MEDIA_FORCE_UNINSTALL') && constant('ARCHIVES_TO_MEDIA_FORCE_UNINSTALL') === true;
+        (new Schema(new Db()))->uninstall($force);
     }
 
     /**

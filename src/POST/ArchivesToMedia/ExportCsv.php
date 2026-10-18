@@ -27,7 +27,7 @@ class ExportCsv extends ACMS_POST
         }
         $jobId = (int) $this->Post->get('jobId');
         try {
-            $csv = $service->exportCsv($jobId, BID);
+            $service->ensureAccessible($jobId, BID);
         } catch (JobNotFoundException) {
             httpStatusCode('404 Not Found');
             die('not found');
@@ -35,7 +35,12 @@ class ExportCsv extends ACMS_POST
         header('Content-Type: text/csv; charset=UTF-8');
         header('Content-Disposition: attachment; filename="archives-to-media-job-' . $jobId . '.csv"');
         header('X-Content-Type-Options: nosniff');
-        echo $csv;
+        $out = fopen('php://output', 'w');
+        if ($out === false) {
+            die();
+        }
+        $service->writeCsv($jobId, BID, $out);
+        fclose($out);
         die();
     }
 }

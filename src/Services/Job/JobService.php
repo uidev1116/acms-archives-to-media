@@ -193,32 +193,39 @@ class JobService
     }
 
     /**
-     * 結果 CSV（UTF-8 BOM 付き）。表計算ソフトで数式として解釈されないよう、先頭が = + - @ の値は無害化する。
+     * ジョブが存在し、このブログのものであることを確かめる（CSV のヘッダーを出す前の確認用）。
+     *
+     * @throws JobNotFoundException
      */
-    public function exportCsv(int $jobId, int $blogId): string
+    public function ensureAccessible(int $jobId, int $blogId): void
     {
         $this->jobFor($jobId, $blogId);
-        $out = fopen('php://temp', 'r+');
-        if ($out === false) {
-            throw new \RuntimeException('CSV を作成できません。');
-        }
-        fputcsv($out, ['item_id', 'target', 'owner_type', 'owner_id', 'status', 'reason', 'source_path', 'media_ids', 'message'], ',', '"', '\\');
+    }
+
+    /**
+     * 結果 CSV（UTF-8 BOM 付き）をストリームへ書き出す。件数が多くてもメモリを使い切らないよう、200 件ずつ書く。
+     * 表計算ソフトで数式として解釈されないよう、先頭が = + - @ の値は無害化する。
+     *
+     * @param resource $stream
+     * @throws JobNotFoundException
+     */
+    public function writeCsv(int $jobId, int $blogId, $stream): void
+    {
+        $this->jobFor($jobId, $blogId);
+        fwrite($stream, "\xEF\xBB\xBF");
+        fputcsv($stream, ['item_id', 'target', 'owner_type', 'owner_id', 'status', 'reason', 'source_path', 'media_ids', 'message'], ',', '"', '\\');
         $page = 1;
         do {
             $res = $this->items->search($jobId, [], 'item_id', false, $page, 200);
             foreach ($res['items'] as $row) {
                 $r = $this->presentRow($row);
-                fputcsv($out, array_map($this->csvCell(...), [
+                fputcsv($stream, array_map($this->csvCell(...), [
                     $r['id'], $r['target'], $r['ownerType'], $r['ownerId'], $r['status'], $r['reason'],
                     implode(' | ', $r['sourcePaths']), implode(',', $r['mediaIds']), Cast::str($r['message']),
                 ]), ',', '"', '\\');
             }
             $page++;
         } while (count($res['items']) === 200);
-        rewind($out);
-        $csv = (string) stream_get_contents($out);
-        fclose($out);
-        return "\xEF\xBB\xBF" . $csv;
     }
 
     /**

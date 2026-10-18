@@ -181,6 +181,8 @@ class JobRunner
             // 3. 変換（トランザクション内で再照合）
             $this->db->begin();
             try {
+                // 再照合から書き込みまでの間に他のリクエストが同じ行を書き換えないよう、先に行ロックを取る
+                $converter->lock($item->locator, $job->options);
                 $again = $converter->snapshot($item->locator, $job->options);
                 if ($again === null || !Snapshot::equals($again, $item->before)) {
                     $this->db->rollBack();

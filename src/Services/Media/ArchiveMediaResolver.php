@@ -19,6 +19,21 @@ use Acms\Services\Media\MediaSourceImporter;
 class ArchiveMediaResolver
 {
     /**
+     * コアのメッセージ（例外文）から理由コードを判定するための対応表。上から順に最初に一致したものを使う。
+     * コアのメッセージが変わると静かに MEDIA_REGISTER_FAILED へ落ちるので、テストで実在を確認している。
+     *
+     * @var list<array{0: string, 1: class-string, 2: ReasonCode}>
+     */
+    public const CORE_MESSAGES = [
+        ['ファイルが見つかりません', MediaSourceImporter::class, ReasonCode::SourceNotFound],
+        ['許可されていないローカルパス', MediaSourceImporter::class, ReasonCode::SourceForbidden],
+        ['実体を解決できません', MediaSourceImporter::class, ReasonCode::SourceForbidden],
+        ['サイズが上限', MediaSourceImporter::class, ReasonCode::SourceTooLarge],
+        ['画像形式は登録できません', Helper::class, ReasonCode::SourceInvalidMime],
+        ['許可されていないファイル形式', Helper::class, ReasonCode::SourceInvalidMime],
+    ];
+
+    /**
      * @param string $baseDir ARCHIVES_DIR の絶対パス（末尾スラッシュ付き）
      */
     public function __construct(
@@ -149,16 +164,18 @@ class ArchiveMediaResolver
         }
     }
 
+    public static function reasonFor(string $message): ReasonCode
+    {
+        foreach (self::CORE_MESSAGES as [$phrase, , $reason]) {
+            if (str_contains($message, $phrase)) {
+                return $reason;
+            }
+        }
+        return ReasonCode::MediaRegisterFailed;
+    }
+
     private function translate(\Throwable $e): SourceException
     {
-        $message = $e->getMessage();
-        $reason = match (true) {
-            str_contains($message, 'ファイルが見つかりません') => ReasonCode::SourceNotFound,
-            str_contains($message, '許可されていないローカルパス'), str_contains($message, '実体を解決できません') => ReasonCode::SourceForbidden,
-            str_contains($message, 'サイズが上限') => ReasonCode::SourceTooLarge,
-            str_contains($message, '画像形式は登録できません'), str_contains($message, '許可されていない') => ReasonCode::SourceInvalidMime,
-            default => ReasonCode::MediaRegisterFailed,
-        };
-        return new SourceException($reason, $message, $e);
+        return new SourceException(self::reasonFor($e->getMessage()), $e->getMessage(), $e);
     }
 }

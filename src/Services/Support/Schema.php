@@ -119,8 +119,36 @@ final class Schema
         )) > 0;
     }
 
-    public function uninstall(): void
+    /**
+     * ロールバックに必要な情報（item_before / item_after）が残っている変換済みアイテムの数。テーブルが無ければ 0。
+     */
+    public function rollbackableItems(): int
     {
+        $exists = Cast::int($this->db->one(
+            'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?',
+            [DB_PREFIX . 'a2m_item']
+        ));
+        if ($exists === 0) {
+            return 0;
+        }
+        return Cast::int($this->db->one('SELECT COUNT(*) FROM ' . $this->db->t('a2m_item') . ' WHERE item_status = \'converted\''));
+    }
+
+    /**
+     * テーブルを削除する。ロールバックできる変換済みアイテムが残っていれば、$force でない限り拒否する
+     * （削除するとロールバックできなくなるため）。
+     *
+     * @throws \RuntimeException
+     */
+    public function uninstall(bool $force = false): void
+    {
+        $count = $this->rollbackableItems();
+        if (!$force && $count > 0) {
+            throw new \RuntimeException(
+                'ロールバックできる変換済みアイテムが ' . $count . ' 件あります。アンインストールするとロールバックできなくなるため中止しました。'
+                . '先にロールバックするか、不要であれば config.system.php で ARCHIVES_TO_MEDIA_FORCE_UNINSTALL を true に定義してください。'
+            );
+        }
         foreach (['a2m_item', 'a2m_job', 'a2m_path_map'] as $table) {
             $this->db->exec('DROP TABLE IF EXISTS ' . $this->db->t($table));
         }

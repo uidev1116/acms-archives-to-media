@@ -300,4 +300,15 @@ final class FieldMediaConverterTest extends A2mTestCase
         $conv->restore($loc, (array) $before, $after, $opts);
         $this->assertEquals($original, $this->db->all('SELECT * FROM ' . $this->db->t('field') . ' WHERE field_eid = ? ORDER BY field_key, field_sort', [$this->entryId]));
     }
+
+    #[Test]
+    public function 行ロックはフィールドの行に対して実行できる(): void
+    {
+        $conv = $this->fieldConverter();
+        $this->db->begin();
+        $conv->lock($this->locator(), JobOptions::defaults());
+        $conv->lock($this->locator('ghost'), JobOptions::defaults());
+        $this->db->rollBack();
+        $this->addToAssertionCount(1);
+    }
 }

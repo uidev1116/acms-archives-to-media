@@ -43,11 +43,12 @@ class Db
 
     /**
      * @param list<scalar|null> $params
+     * @param string $suffix LIMIT 1 の後ろに付ける句（FOR UPDATE など）
      * @return array<string, mixed>|null
      */
-    public function row(string $sql, array $params = []): ?array
+    public function row(string $sql, array $params = [], string $suffix = ''): ?array
     {
-        $rows = $this->all($sql . ' LIMIT 1', $params);
+        $rows = $this->all($sql . ' LIMIT 1' . $suffix, $params);
         return $rows[0] ?? null;
     }
 

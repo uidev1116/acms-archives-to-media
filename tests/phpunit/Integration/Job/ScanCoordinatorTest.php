@@ -296,6 +296,11 @@ final class ScanCoordinatorTest extends A2mTestCase
                 return $this->inner->currentSourcePaths($locator);
             }
 
+            public function lock(\Acms\Plugins\ArchivesToMedia\Services\Domain\Locator\LocatorInterface $locator, JobOptions $options): void
+            {
+                $this->inner->lock($locator, $options);
+            }
+
             public function apply(\Acms\Plugins\ArchivesToMedia\Services\Domain\Candidate $candidate, array $mediaIds, JobOptions $options): array
             {
                 return $this->inner->apply($candidate, $mediaIds, $options);

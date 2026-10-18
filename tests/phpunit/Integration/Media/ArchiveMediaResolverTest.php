@@ -6,6 +6,7 @@ namespace Acms\Plugins\ArchivesToMedia\Tests\Integration\Media;
 
 use Acms\Plugins\ArchivesToMedia\Services\Support\Cast;
 use Acms\Plugins\ArchivesToMedia\Services\Domain\ReasonCode;
+use Acms\Plugins\ArchivesToMedia\Services\Media\ArchiveMediaResolver;
 use Acms\Plugins\ArchivesToMedia\Services\Media\MediaMeta;
 use Acms\Plugins\ArchivesToMedia\Services\Media\MediaReferenceChecker;
 use Acms\Plugins\ArchivesToMedia\Services\Media\SourceException;
@@ -242,5 +243,35 @@ final class ArchiveMediaResolverTest extends A2mTestCase
 
         $row = $this->db->row('SELECT media_blog_id, media_field_3 FROM ' . $this->db->t('media') . ' WHERE media_id = ?', [$res->mediaId]);
         $this->assertSame([(string) $child, 'alt'], [Cast::str($row['media_blog_id'] ?? ''), Cast::str($row['media_field_3'] ?? '')]);
+    }
+
+    #[Test]
+    public function ブロックエディターのdata_midによる参照も見つける(): void
+    {
+        $checker = new MediaReferenceChecker($this->db);
+        $used = MediaSeeder::seed($this->blogId);
+        $other = MediaSeeder::seed($this->blogId);
+        $this->insertColumn('b1', 'block-editor', ['column_field_1' => '<p>x</p><figure><img data-mid="' . $used . '" src="a.jpg"></figure>']);
+        $this->insertColumn('b2', 'block-editor', ['column_field_1' => '<img data-mid="' . $used . '9" src="b.jpg">'], null, null, 3);
+
+        $this->assertTrue($checker->isReferenced($used));
+        $this->assertFalse($checker->isReferenced($other));
+        // data-mid が別の ID の一部（例: 12 と 129）なら、参照とはみなさない
+        $short = (int) substr((string) $used, 0, 1);
+        if ($short > 0 && !str_contains('"' . $used . '"', '"' . $short . '"')) {
+            $this->assertFalse($checker->isReferenced($short));
+        }
+    }
+
+    #[Test]
+    public function 理由コードの判定に使うコアのメッセージは_コアのソースに実在する(): void
+    {
+        foreach (ArchiveMediaResolver::CORE_MESSAGES as [$phrase, $class, $reason]) {
+            $file = (new \ReflectionClass($class))->getFileName();
+            $this->assertIsString($file);
+            $this->assertStringContainsString($phrase, (string) file_get_contents($file), $class . ' に「' . $phrase . '」がありません');
+            $this->assertSame($reason, ArchiveMediaResolver::reasonFor('前置き: ' . $phrase . ': 後ろ'));
+        }
+        $this->assertSame(ReasonCode::MediaRegisterFailed, ArchiveMediaResolver::reasonFor('想定外のメッセージ'));
     }
 }

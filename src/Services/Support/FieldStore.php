@@ -42,13 +42,13 @@ class FieldStore
      *
      * @return list<array<string, mixed>>
      */
-    public function family(FieldLocator $locator, string $fd): array
+    public function family(FieldLocator $locator, string $fd, bool $forUpdate = false): array
     {
         [$owner, $params] = $this->ownerWhere($locator);
         return $this->db->all(
             'SELECT * FROM ' . $this->db->t($locator->table()) . '
              WHERE ' . $owner . ' AND field_sort = ? AND (BINARY field_key = BINARY ? OR BINARY field_key LIKE BINARY ?)
-             ORDER BY field_key',
+             ORDER BY field_key' . ($forUpdate ? ' FOR UPDATE' : ''),
             [...$params, $locator->sort, $fd, $this->db->escapeLike($fd) . '@%']
         );
     }

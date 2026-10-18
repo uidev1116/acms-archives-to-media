@@ -27,6 +27,11 @@ abstract class AbstractUnitConverter implements ConverterInterface
         return $row === null ? null : ['row' => Snapshot::normalizeRow($row)];
     }
 
+    public function lock(LocatorInterface $locator, JobOptions $options): void
+    {
+        $this->loadRow($locator, true);
+    }
+
     public function currentSourcePaths(LocatorInterface $locator): ?array
     {
         $row = $this->loadRow($locator);
@@ -58,15 +63,17 @@ abstract class AbstractUnitConverter implements ConverterInterface
     /**
      * @return array<string, mixed>|null
      */
-    protected function loadRow(LocatorInterface $locator): ?array
+    protected function loadRow(LocatorInterface $locator, bool $forUpdate = false): ?array
     {
         $loc = $this->requireColumn($locator);
+        $suffix = $forUpdate ? ' FOR UPDATE' : '';
         if ($loc->revId === null) {
-            return $this->db->row('SELECT * FROM ' . $this->db->t('column') . ' WHERE column_id = ?', [$loc->columnId]);
+            return $this->db->row('SELECT * FROM ' . $this->db->t('column') . ' WHERE column_id = ?', [$loc->columnId], $suffix);
         }
         return $this->db->row(
             'SELECT * FROM ' . $this->db->t('column_rev') . ' WHERE column_id = ? AND column_rev_id = ?',
-            [$loc->columnId, $loc->revId]
+            [$loc->columnId, $loc->revId],
+            $suffix
         );
     }
 

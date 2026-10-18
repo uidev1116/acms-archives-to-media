@@ -58,8 +58,9 @@ abstract class AbstractFieldScanner implements ScannerInterface
             }
             $last = $state['t'] === $table ? $state['sk'] : '';
             $batch = max($limit, 50);
-            while (count($candidates) < $limit) {
-                $rows = $this->fetch($table, $options, $blogIds, $last, $batch);
+            $keys = $this->targetKeys($table, $options, $blogIds);
+            while ($keys !== [] && count($candidates) < $limit) {
+                $rows = $this->fetch($table, $options, $blogIds, $keys, $last, $batch);
                 if ($rows === []) {
                     break;
                 }
@@ -82,10 +83,38 @@ abstract class AbstractFieldScanner implements ScannerInterface
     }
 
     /**
+     * 対象ブログに存在する {fd}@path のキーのうち、変換対象のものだけ（先に絞って全行走査を避ける）。
+     *
      * @param list<int> $blogIds
+     * @return list<string>
+     */
+    private function targetKeys(string $table, JobOptions $options, array $blogIds): array
+    {
+        if ($blogIds === []) {
+            return [];
+        }
+        $rows = $this->db->all(
+            'SELECT DISTINCT field_key FROM ' . $this->db->t($table)
+            . ' WHERE field_key LIKE \'%@path\' AND field_blog_id IN (' . $this->db->placeholders($blogIds) . ')',
+            $blogIds
+        );
+        $keys = [];
+        foreach ($rows as $row) {
+            $key = Cast::str($row['field_key']);
+            $fd = substr($key, 0, -5);
+            if ($fd !== '' && JobOptions::isFieldName($fd) && $this->names->isTarget($fd, $options)) {
+                $keys[] = $key;
+            }
+        }
+        return $keys;
+    }
+
+    /**
+     * @param list<int> $blogIds
+     * @param list<string> $keys
      * @return list<array<string, mixed>>
      */
-    private function fetch(string $table, JobOptions $options, array $blogIds, string $last, int $limit): array
+    private function fetch(string $table, JobOptions $options, array $blogIds, array $keys, string $last, int $limit): array
     {
         if ($blogIds === [] || $options->entryStatus === []) {
             return [];
@@ -104,7 +133,8 @@ abstract class AbstractFieldScanner implements ScannerInterface
             . ($isRev ? ', CHAR(1), LPAD(COALESCE(field_rev_id, 0), 10, \'0\')' : '') . ')';
 
         $params = [];
-        $where = 'field_key LIKE \'%@path\' AND field_value IS NOT NULL AND field_value <> \'\'';
+        $where = 'field_key IN (' . $this->db->placeholders($keys) . ') AND field_value IS NOT NULL AND field_value <> \'\'';
+        array_push($params, ...$keys);
         $where .= ' AND field_blog_id IN (' . $this->db->placeholders($blogIds) . ')';
         array_push($params, ...$blogIds);
         $where .= ' AND (' . implode(' OR ', $ownerConds) . ')';
