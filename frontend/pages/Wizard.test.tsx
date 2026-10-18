@@ -65,6 +65,11 @@ function mount(client: ReturnType<typeof fakeClient>) {
 
 async function goToScan() {
   await userEvent.click(screen.getByRole('button', { name: 'スキャンして確認へ' }));
+  // 既定は同名モードなので、確認ダイアログに同意して進む
+  const dialog = screen.queryByRole('dialog');
+  if (dialog !== null) {
+    await userEvent.click(within(dialog).getByRole('button', { name: '理解して続ける' }));
+  }
 }
 
 describe('Wizard', () => {
@@ -85,7 +90,7 @@ describe('Wizard', () => {
     expect(screen.getByRole('listitem', { current: 'step' })).toHaveTextContent('スキャンと確認');
     const created = client.calls.find((c) => c.action === 'create');
     expect(created?.params.options).toMatchObject({
-      field: { mode: 'suffix' },
+      field: { mode: 'same' },
       includeRevisions: false,
     });
 

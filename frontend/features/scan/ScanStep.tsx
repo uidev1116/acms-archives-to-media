@@ -5,6 +5,7 @@ import { HStack } from '@ablogcms/components/stack';
 import Modal, { ModalBody, ModalFooter, ModalHeader } from '@ablogcms/components/modal';
 import ProgressBar from '@ablogcms/components/progress-bar';
 import Spinner from '@ablogcms/components/spinner';
+import { Loading } from '../../components/Loading';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApi } from '../../api/context';
 import { useChunkRunner } from '../../hooks/useChunkRunner';
@@ -95,7 +96,7 @@ export function ScanStep({ jobId, onBack, onProceed }: Props) {
         </>
       )}
 
-      {runner.finished && detail === null && <Spinner size="1.5em" />}
+      {runner.finished && detail === null && <Loading size="1.5em" />}
 
       <Modal isOpen={confirming} onClose={() => setConfirming(false)} size="small">
         <ModalHeader>変換を開始します</ModalHeader>

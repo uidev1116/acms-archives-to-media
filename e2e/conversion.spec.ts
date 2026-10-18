@@ -11,6 +11,8 @@ async function openWizard(page: Page): Promise<void> {
 
 async function scan(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'スキャンして確認へ' }).click();
+  // 既定は同名モードなので、確認ダイアログに同意して進む
+  await page.getByRole('button', { name: '理解して続ける' }).click();
   await expect(page.getByRole('heading', { name: '2. スキャンと確認' })).toBeVisible();
   await expect(page.getByRole('button', { name: '変換の実行へ' })).toBeEnabled();
 }

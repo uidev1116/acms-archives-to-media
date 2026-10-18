@@ -1,6 +1,6 @@
 import Alert from '@ablogcms/components/alert';
 import Button from '@ablogcms/components/button';
-import Spinner from '@ablogcms/components/spinner';
+import { Loading } from '../components/Loading';
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError } from '../api/client';
 import { useApi } from '../api/context';
@@ -97,7 +97,7 @@ export function JobPanel({ jobId, onChanged, allowDelete = false, onDeleted }: P
         {error}
       </Alert>
     ) : (
-      <Spinner size="1.5em" />
+      <Loading size="1.5em" />
     );
   }
 

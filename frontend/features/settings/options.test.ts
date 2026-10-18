@@ -38,10 +38,10 @@ describe('parseList / parseCustomMap', () => {
 });
 
 describe('defaultFormState', () => {
-  it('設計書の決定どおりの既定値（別名モード・リビジョンなし・auto・全対象）', () => {
+  it('既定値（同名モード・リビジョンなし・auto・全対象）', () => {
     const s = defaultFormState(defs);
     expect(s.targets).toEqual(['unit_image', 'unit_file', 'field_image', 'field_file']);
-    expect(s.fieldMode).toBe('suffix');
+    expect(s.fieldMode).toBe('same');
     expect(s.fieldSuffix).toBe('_media');
     expect(s.includeRevisions).toBe(false);
     expect(s.includeChildBlogs).toBe(false);

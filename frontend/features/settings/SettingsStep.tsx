@@ -37,10 +37,14 @@ const ENTRY_STATUS_LABEL: Record<EntryStatus, string> = {
 };
 
 const FIELD_MODES: { value: FieldMode; label: string }[] = [
-  { value: 'suffix', label: '別名のフィールドに書き込む（既定。旧データはそのまま残る）' },
   {
     value: 'same',
-    label: '同名のフィールドに書き込む（上級者向け・テンプレートの同時差し替えが必要）',
+    label:
+      '同名のフィールドに書き込む（既定。メンテナンス中の実行向け・テンプレートの同時差し替えが必要）',
+  },
+  {
+    value: 'suffix',
+    label: '別名のフィールドに書き込む（旧データはそのまま残る。段階的に移行する場合）',
   },
   { value: 'custom', label: 'カスタム（フィールドごとに書き込み先を指定）' },
 ];
@@ -80,10 +84,12 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
         1. 設定
       </h2>
 
-      <Alert variant="warning" className="acms-admin-a2m-note" role="note">
-        テンプレートを直す前に管理画面でエントリーを再保存すると、書き込んだメディアの値（別名のフィールド）は消えます。
-        旧データは残るので表示は壊れません。消えた分は、テンプレート更新後にもう一度実行すると揃います。
-      </Alert>
+      {value.fieldMode === 'suffix' && (
+        <Alert variant="warning" className="acms-admin-a2m-note" role="note">
+          テンプレートを直す前に管理画面でエントリーを再保存すると、書き込んだメディアの値（別名のフィールド）は消えます。
+          旧データは残るので表示は壊れません。消えた分は、テンプレート更新後にもう一度実行すると揃います。
+        </Alert>
+      )}
 
       <Fieldset legend="変換する対象">
         <div className="acms-admin-a2m-checks">

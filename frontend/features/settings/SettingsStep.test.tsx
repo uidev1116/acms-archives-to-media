@@ -37,21 +37,38 @@ function Harness({
   );
 }
 
+/** 「スキャンして確認へ」を押す。同名モードでは確認ダイアログが出るので、同意して進める */
+async function clickScan() {
+  await userEvent.click(screen.getByRole('button', { name: 'スキャンして確認へ' }));
+  const dialog = screen.queryByRole('dialog');
+  if (dialog !== null) {
+    await userEvent.click(within(dialog).getByRole('button', { name: '理解して続ける' }));
+  }
+}
+
 describe('SettingsStep', () => {
-  it('テンプレート未更新の再保存についての注意を常に表示する', () => {
-    render(<Harness onSubmit={vi.fn()} />);
+  it('別名モードのときだけ、テンプレート未更新の再保存についての注意を表示する', async () => {
+    render(<Harness onSubmit={vi.fn()} initial={{ fieldMode: 'suffix' }} />);
     expect(screen.getByText(/再保存すると/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText(/同名/));
+    expect(screen.queryByText(/再保存すると/)).not.toBeInTheDocument();
   });
 
-  it('既定のまま送信すると、別名モードのオプションで onSubmit される', async () => {
+  it('既定のまま送信すると、同名モードの確認に同意したあと、同名モードのオプションで onSubmit される', async () => {
     const onSubmit = vi.fn();
     render(<Harness onSubmit={onSubmit} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'スキャンして確認へ' }));
+    expect(onSubmit).not.toHaveBeenCalled();
+    await userEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: '理解して続ける' }),
+    );
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
     const o = onSubmit.mock.calls[0]?.[0] as JobOptions;
-    expect(o.field.mode).toBe('suffix');
+    expect(o.field.mode).toBe('same');
+    expect(o.field.removeLegacyKeys).toBe(true);
     expect(o.field.suffix).toBe('_media');
     expect(o.includeRevisions).toBe(false);
     expect(o.media.enlarged).toBe('auto');
@@ -72,7 +89,7 @@ describe('SettingsStep', () => {
     render(<Harness onSubmit={onSubmit} />);
 
     await userEvent.selectOptions(screen.getByLabelText('image の変換先ユニット'), 'media_2');
-    await userEvent.click(screen.getByRole('button', { name: 'スキャンして確認へ' }));
+    await clickScan();
 
     expect((onSubmit.mock.calls[0]?.[0] as JobOptions).unitTypeMap).toEqual({
       image: 'media_2',
@@ -99,7 +116,7 @@ describe('SettingsStep', () => {
 
   it('接尾辞を変えられる', async () => {
     const onSubmit = vi.fn();
-    render(<Harness onSubmit={onSubmit} />);
+    render(<Harness onSubmit={onSubmit} initial={{ fieldMode: 'suffix' }} />);
     const input = screen.getByLabelText('接尾辞');
     await userEvent.clear(input);
     await userEvent.type(input, '_m');
@@ -178,7 +195,7 @@ describe('SettingsStep', () => {
     await userEvent.type(screen.getByLabelText('対象にするフィールド名（空なら全部）'), 'hero');
     await userEvent.type(screen.getByLabelText('除外するフィールド名'), 'og');
 
-    await userEvent.click(screen.getByRole('button', { name: 'スキャンして確認へ' }));
+    await clickScan();
     const o = onSubmit.mock.calls[0]?.[0] as JobOptions;
     expect(o.includeRevisions).toBe(true);
     expect(o.includeChildBlogs).toBe(true);

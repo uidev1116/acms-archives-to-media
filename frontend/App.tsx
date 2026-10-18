@@ -1,5 +1,5 @@
 import Alert from '@ablogcms/components/alert';
-import Spinner from '@ablogcms/components/spinner';
+import { Loading } from './components/Loading';
 import { useEffect, useState } from 'react';
 import { ApiError } from './api/client';
 import { useApi } from './api/context';
@@ -50,7 +50,7 @@ export function App() {
     );
   }
   if (definitions === null) {
-    return <Spinner size="2em" />;
+    return <Loading />;
   }
 
   return (

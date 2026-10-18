@@ -70,7 +70,7 @@ export function defaultFormState(defs: Definitions): FormState {
   return {
     targets: [...ALL_TARGETS],
     unitTypeMap,
-    fieldMode: 'suffix',
+    fieldMode: 'same',
     fieldSuffix: '_media',
     customText: '',
     includeKeysText: '',
