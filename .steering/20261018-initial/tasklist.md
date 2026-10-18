@@ -28,15 +28,15 @@
 
 ## 3. 実装
 
-1. [ ] Domain（TargetType / ItemStatus / JobStatus / ReasonCode / JobOptions / Candidate / Locator）と Schema（3 テーブル、install / uninstall）
-2. [ ] Repository（Job / Item / PathMap）
-3. [ ] Media（SourcePathSelector / ArchiveMediaResolver / BlogOwnershipFixer / MediaMetaWriter）
-4. [ ] Scanner 4 種と ScanCoordinator（ドライラン見込み含む）
-5. [ ] Converter 4 種（多言語区切り・フィールドグループ・同名モード）
-6. [ ] JobRunner（チャンク・スナップショット照合・編集ロック・キャッシュクリア・Lock）と Rollbacker
-7. [ ] POST ハンドラ（薄く。トークンと権限）
-8. [ ] ServiceProvider（Twig・InjectTemplate・アセット API・DI）
-9. [ ] フロント（ウィザード + ジョブ詳細）
+1. [x] Domain（TargetType / ItemStatus / JobStatus / ReasonCode / JobOptions / Candidate / Locator）と Schema（3 テーブル、install / uninstall）
+2. [x] Repository（Job / Item / PathMap）
+3. [x] Media（SourcePathSelector / ArchiveMediaResolver / BlogOwnershipFixer / MediaMetaWriter）
+4. [x] Scanner 4 種と ScanCoordinator（ドライラン見込み含む）
+5. [x] Converter 4 種（多言語区切り・フィールドグループ・同名モード）
+6. [x] JobRunner（チャンク・スナップショット照合・編集ロック・キャッシュクリア・Lock）と Rollbacker
+7. [x] POST ハンドラ（薄く。トークンと権限）
+8. [x] ServiceProvider（Twig・InjectTemplate・アセット API・DI）
+9. [x] フロント（ウィザード + ジョブ詳細）
 
 ## 4. 自動チェック
 
@@ -65,3 +65,16 @@
 - [x] 親ブログのデータが変わっていないことを確認
 - [x] `docs/report.md` を作成して push（サブエージェントレビュー結果は追記予定）
 - [x] `git status` クリーン / origin/main と一致
+
+## 追加（すべて実装する方針への変更）
+
+- [x] 旧データのクリーンアップ（Cleaner / UI / ロールバック対応）
+- [x] 管理画面の CSS クラスを `acms-admin-a2m-*` に変更
+- [x] ブロックエディター・カスタムユニットのメディア参照判定
+- [x] フィールドスキャナーのキー絞り込み
+- [x] 行ロック（`SELECT ... FOR UPDATE`）
+- [x] CSV のストリーム出力
+- [x] コアのメッセージ対応表の固定（テスト）
+- [x] アンインストール保護
+- [x] リビジョン・同名・カスタム名の実機確認（ハッシュで復元を確認）
+- [x] Playwright E2E（ローカル専用）

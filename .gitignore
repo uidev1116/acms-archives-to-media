@@ -41,3 +41,8 @@ node_modules/
 
 # docs: only Markdown is committed (HTML is for local viewing)
 docs/*.html
+
+# e2e (login session / reports)
+/e2e/.auth/
+/test-results/
+/playwright-report/

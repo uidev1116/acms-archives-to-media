@@ -10,14 +10,15 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite build --watch --mode development",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p e2e/tsconfig.json",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "lint": "npm run lint:eslint && npm run lint:prettier && npm run lint:stylelint",
     "lint:eslint": "eslint frontend",
-    "lint:prettier": "prettier --check \"frontend/**/*.{ts,tsx}\" package.json tsconfig.json vite.config.ts eslint.config.js \"src/assets/css/*.css\"",
+    "lint:prettier": "prettier --check \"frontend/**/*.{ts,tsx}\" \"e2e/**/*.ts\" playwright.config.ts package.json tsconfig.json vite.config.ts eslint.config.js \"src/assets/css/*.css\"",
     "lint:stylelint": "stylelint \"src/assets/css/*.css\"",
-    "format": "prettier --write \"frontend/**/*.{ts,tsx}\" package.json tsconfig.json vite.config.ts eslint.config.js \"src/assets/css/*.css\""
+    "format": "prettier --write \"frontend/**/*.{ts,tsx}\" \"e2e/**/*.ts\" playwright.config.ts package.json tsconfig.json vite.config.ts eslint.config.js \"src/assets/css/*.css\"",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@ablogcms/components": "3.2.37",
@@ -26,9 +27,11 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
+    "@playwright/test": "^1.49.1",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@testing-library/user-event": "^14.5.2",
+    "@types/node": "^24.19.2",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^4.3.4",
