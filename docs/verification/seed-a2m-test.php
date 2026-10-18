@@ -16,6 +16,7 @@
  *   エントリー a2m-fields … 画像フィールド（グループ内を含む）、ファイルフィールド、ファイルが無いフィールド
  *   エントリー a2m-locked … 編集ロック中のエントリー（ENTRY_LOCKED のスキップ確認用）
  *   エントリー a2m-many   … 画像ユニット 30 件（一時停止・再開の確認用）
+ *   エントリー a2m-custom … カスタムユニット内のフィールド（画像・ファイル）とフィールドグループ（カスタムユニット所属の確認用）
  *   エントリー a2m-rev    … リビジョン（entry_rev / column_rev / field_rev）を持つエントリー（リビジョンを含める設定の確認用）
  *   archives/a2m-test/    … 上記が参照する実ファイル
  */
@@ -110,6 +111,8 @@ file_put_contents(
     "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
     . "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n"
 );
+image($dir . 'custom-1.jpg', 640, 480, 200, 90, 90, 'custom 1');
+image($dir . 'custom-2.jpg', 640, 480, 90, 200, 90, 'custom 2');
 image($dir . 'rev-a.jpg', 640, 480, 120, 80, 30, 'rev a');
 image($dir . 'rev-b.jpg', 640, 480, 30, 80, 120, 'rev b');
 for ($i = 1; $i <= 30; $i++) {
@@ -231,4 +234,23 @@ foreach ([1 => 'rev-a.jpg', 2 => 'rev-b.jpg'] as $revId => $file) {
     }
 }
 
-fwrite(STDERR, "seeded blog {$blogId}: entries {$e1}, {$e2}, {$e3}, {$e4}, {$e5}\n");
+// 6. カスタムユニット（画像フィールド・ファイルフィールドと、ユニット内のフィールドグループ）
+$e6 = entry($blogId, 'a2m-custom', 'カスタムユニットを持つエントリー');
+foreach ([1, 2] as $n) {
+    unit($blogId, $e6, $n, 'custom', ['1' => 'custom']);
+    $uid = (string) q('SELECT column_id FROM ' . t('column') . ' WHERE column_entry_id = ? AND column_sort = ?', [$e6, $n], 'one');
+    $rows = imageField('photo', $p . "custom-{$n}.jpg", '', "カスタム画像 {$n}") + [
+        'doc@path' => $p . 'estimate.pdf', 'doc@baseName' => 'estimate.pdf', 'doc@fileSize' => '350',
+        'doc@downloadName' => '資料.pdf', 'doc@originalName' => 'estimate.pdf', 'doc@secret' => md5("doc{$n}"),
+        'title' => "カスタム {$n}",
+    ];
+    foreach ($rows as $key => $value) {
+        q('INSERT INTO ' . t('field') . ' (field_key, field_value, field_type, field_sort, field_search, field_eid, field_unit_id, field_blog_id) VALUES (?, ?, NULL, 1, \'off\', NULL, ?, ?)', [$key, $value, $uid, $blogId], 'exec');
+    }
+    // ユニット内のフィールドグループ（title / photo / doc を 1 グループに）
+    foreach (['title', 'photo', 'doc'] as $i => $fd) {
+        q('INSERT INTO ' . t('field') . ' (field_key, field_value, field_type, field_sort, field_search, field_eid, field_unit_id, field_blog_id) VALUES (\'@card\', ?, NULL, ?, \'off\', NULL, ?, ?)', [$fd, $i + 1, $uid, $blogId], 'exec');
+    }
+}
+
+fwrite(STDERR, "seeded blog {$blogId}: entries {$e1}, {$e2}, {$e3}, {$e4}, {$e5}, {$e6}\n");
