@@ -1,6 +1,6 @@
-import Alert from '@ablogcms/components/alert';
-import Button from '@ablogcms/components/button';
-import ProgressBar from '@ablogcms/components/progress-bar';
+import { Alert } from '@ablogcms/components/alert';
+import { Button } from '@ablogcms/components/button';
+import { ProgressBar } from '@ablogcms/components/progress-bar';
 import { useEffect, useRef, useState } from 'react';
 import { useApi } from '../../api/context';
 import { useChunkRunner } from '../../hooks/useChunkRunner';

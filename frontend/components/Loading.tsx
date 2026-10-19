@@ -1,4 +1,4 @@
-import Spinner from '@ablogcms/components/spinner';
+import { Spinner } from '@ablogcms/components/spinner';
 
 /**
  * 読み込み中の表示（画面の中央寄せ）。

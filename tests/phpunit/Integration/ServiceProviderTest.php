@@ -137,10 +137,15 @@ final class ServiceProviderTest extends A2mTestCase
     }
 
     #[Test]
-    public function 要件チェックは環境が整っていればtrue(): void
+    public function 要件チェックは_コアのバージョンがRequirementsを満たすかを反映する(): void
     {
         $provider = new ServiceProvider();
-        $this->assertSame($provider->checkRequirements(), $provider->checkRequirements());
+        $supported = \Acms\Plugins\ArchivesToMedia\Services\Requirements::isSupported(defined('VERSION') ? VERSION : null);
+        if (!$supported) {
+            $this->assertFalse($provider->checkRequirements(), '古いコアではインストールできない');
+        } else {
+            $this->assertSame($provider->checkRequirements(), $provider->checkRequirements());
+        }
     }
 
     #[Test]
@@ -168,6 +173,10 @@ final class ServiceProviderTest extends A2mTestCase
 
         $this->assertTrue(\Acms\Services\Facades\Asset::has('archives-to-media'));
         $this->assertTrue(\Acms\Services\Facades\Asset::has('archives-to-media-style'));
+        // IIFE なので通常の <script>（type="module" にしない。モジュールだと遅延され、ACMS.adminReady の前提が崩れる）
+        $html = \Acms\Services\Facades\Asset::render('body_end');
+        $this->assertSame(1, preg_match('#<script\\b[^>]*archives-to-media\\.js[^>]*>#', $html, $tag), $html);
+        $this->assertStringNotContainsString('module', $tag[0] ?? '');
         \Acms\Services\Facades\Asset::dequeue('archives-to-media');
         \Acms\Services\Facades\Asset::dequeue('archives-to-media-style');
     }

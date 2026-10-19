@@ -1,7 +1,8 @@
-import Alert from '@ablogcms/components/alert';
-import Badge from '@ablogcms/components/badge';
-import Button from '@ablogcms/components/button';
-import Table, {
+import { Alert } from '@ablogcms/components/alert';
+import { Badge } from '@ablogcms/components/badge';
+import { Button } from '@ablogcms/components/button';
+import {
+  Table,
   TableBody,
   TableCell,
   TableHead,

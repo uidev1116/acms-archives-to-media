@@ -27,6 +27,7 @@ use Acms\Plugins\ArchivesToMedia\Services\Media\MediaMetaWriter;
 use Acms\Plugins\ArchivesToMedia\Services\Media\MediaReferenceChecker;
 use Acms\Plugins\ArchivesToMedia\Services\Media\SourcePathSelector;
 use Acms\Plugins\ArchivesToMedia\Services\Repository\ItemRepository;
+use Acms\Plugins\ArchivesToMedia\Services\Requirements;
 use Acms\Plugins\ArchivesToMedia\Services\Repository\JobRepository;
 use Acms\Plugins\ArchivesToMedia\Services\Repository\PathMapRepository;
 use Acms\Plugins\ArchivesToMedia\Services\Scanner\FieldFileScanner;
@@ -135,7 +136,6 @@ class ServiceProvider extends ACMS_App
         Asset::script('archives-to-media', $base . 'dist/archives-to-media.js', [
             'deps' => Asset::has('acms-admin') ? ['acms-admin'] : [],
             'position' => 'body_end',
-            'attrs' => ['type' => 'module'],
         ]);
     }
 
@@ -149,7 +149,10 @@ class ServiceProvider extends ACMS_App
         if (version_compare(PHP_VERSION, '8.1.0', '<')) {
             return false;
         }
-        // アセット API（3.2.29 以降）
+        // コアが ACMS.Library で React DOM とデザインシステムの部品を公開する 3.2.38 以降（アセット API も含む）
+        if (!Requirements::isSupported(defined('VERSION') ? VERSION : null)) {
+            return false;
+        }
         if (!class_exists(Asset::class)) {
             return false;
         }

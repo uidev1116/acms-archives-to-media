@@ -33,6 +33,28 @@ export default tseslint.config(
       'no-console': ['error', { allow: ['warn', 'error'] }],
     },
   },
+  {
+    // コアが ACMS.Library.components で公開する部品は、ビルドで external（名前空間のまま渡る）。
+    // 既定の import（import X from）だと、実行時に名前空間オブジェクトが渡って壊れるので、名前付き import にする。
+    // select はコアが公開していないので同梱され、既定の import でよい。
+    files: ['frontend/**/*.{ts,tsx}'],
+    ignores: ['frontend/**/*.test.{ts,tsx}', 'frontend/test/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@ablogcms/components/*', '!@ablogcms/components/select'],
+              importNames: ['default'],
+              message:
+                '名前付き import にしてください（external の部品は既定の import だと壊れます）',
+            },
+          ],
+        },
+      ],
+    },
+  },
   // 管理画面の UI なので、アクセシビリティの基本ルールを有効にする
   { files: ['frontend/**/*.tsx'], ...jsxA11y.flatConfigs.recommended },
   {

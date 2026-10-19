@@ -1,6 +1,6 @@
-import Button from '@ablogcms/components/button';
+import { Button } from '@ablogcms/components/button';
 import { HStack } from '@ablogcms/components/stack';
-import Modal, { ModalBody, ModalFooter, ModalHeader } from '@ablogcms/components/modal';
+import { Modal, ModalBody, ModalFooter, ModalHeader } from '@ablogcms/components/modal';
 
 interface Props {
   isOpen: boolean;

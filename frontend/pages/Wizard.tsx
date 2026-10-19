@@ -1,5 +1,5 @@
-import Alert from '@ablogcms/components/alert';
-import Button from '@ablogcms/components/button';
+import { Alert } from '@ablogcms/components/alert';
+import { Button } from '@ablogcms/components/button';
 import { useState } from 'react';
 import { ApiError } from '../api/client';
 import { useApi } from '../api/context';

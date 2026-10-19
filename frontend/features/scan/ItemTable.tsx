@@ -1,10 +1,11 @@
-import Alert from '@ablogcms/components/alert';
-import Badge from '@ablogcms/components/badge';
-import Button from '@ablogcms/components/button';
-import Checkbox from '@ablogcms/components/checkbox';
-import Input from '@ablogcms/components/input';
+import { Alert } from '@ablogcms/components/alert';
+import { Badge } from '@ablogcms/components/badge';
+import { Button } from '@ablogcms/components/button';
+import { Checkbox } from '@ablogcms/components/checkbox';
+import { Input } from '@ablogcms/components/input';
 import Select from '@ablogcms/components/select';
-import Table, {
+import {
+  Table,
   TableBody,
   TableCell,
   TableHead,

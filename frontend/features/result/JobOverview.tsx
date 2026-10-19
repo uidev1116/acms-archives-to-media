@@ -1,7 +1,7 @@
-import Alert from '@ablogcms/components/alert';
-import Badge from '@ablogcms/components/badge';
-import Button from '@ablogcms/components/button';
-import Table, { TableBody, TableCell, TableHead, TableRow } from '@ablogcms/components/table';
+import { Alert } from '@ablogcms/components/alert';
+import { Badge } from '@ablogcms/components/badge';
+import { Button } from '@ablogcms/components/button';
+import { Table, TableBody, TableCell, TableHead, TableRow } from '@ablogcms/components/table';
 import { useDefinitions } from '../../definitions';
 import {
   formatDateTime,

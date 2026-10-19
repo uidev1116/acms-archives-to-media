@@ -1,7 +1,7 @@
-import Button from '@ablogcms/components/button';
-import Checkbox from '@ablogcms/components/checkbox';
+import { Button } from '@ablogcms/components/button';
+import { Checkbox } from '@ablogcms/components/checkbox';
 import { HStack } from '@ablogcms/components/stack';
-import Modal, { ModalBody, ModalFooter, ModalHeader } from '@ablogcms/components/modal';
+import { Modal, ModalBody, ModalFooter, ModalHeader } from '@ablogcms/components/modal';
 import { useState } from 'react';
 
 interface Props {

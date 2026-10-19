@@ -1,4 +1,4 @@
-import Alert from '@ablogcms/components/alert';
+import { Alert } from '@ablogcms/components/alert';
 import { Loading } from './components/Loading';
 import { useEffect, useState } from 'react';
 import { ApiError } from './api/client';

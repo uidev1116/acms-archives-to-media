@@ -1,4 +1,4 @@
-import Button from '@ablogcms/components/button';
+import { Button } from '@ablogcms/components/button';
 import { useState } from 'react';
 import type { JobOptions } from '../../types';
 import { destName } from './destName';

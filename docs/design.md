@@ -2,7 +2,7 @@
 
 a-blog cms の `archives/` 配下の画像・ファイルを参照しているユニットとカスタムフィールドを見つけ、そのファイルをメディアに登録して、参照データをメディア形式へ書き換える拡張アプリです。
 
-対象: a-blog cms 3.2.29 以降（アセット API、Twig 管理画面、`Media\Helper::registerLocalFile()` / `MediaSourceImporter` を使うため）／PHP 8.1+／2026-10-18 初版・同日改訂（アセット API・Twig・素の CSS・公式テスト基盤を反映）
+対象: a-blog cms 3.2.38 以降（`ACMS.Library` の React DOM・デザインシステムの部品、アセット API、Twig 管理画面、`Media\Helper::registerLocalFile()` / `MediaSourceImporter` を使うため）／PHP 8.1+／2026-10-18 初版・同日改訂（アセット API・Twig・素の CSS・公式テスト基盤を反映）
 
 ## 1. 概要
 
@@ -270,12 +270,16 @@ plugins/ArchivesToMedia/
 │  └ pages/                     … パターンに応じた画面構成（Wizard / JobList+JobDetail など）
 └ src/assets/                   … 配信されるファイル（src/ が extension/plugins/ArchivesToMedia にリンクされるため）
    ├ css/archives-to-media.css  … 素の CSS（Sass は使わない。ビルドもしない）
-   └ dist/archives-to-media.js  … Vite の出力（ES module 1 ファイル）
+   └ dist/archives-to-media.js  … Vite の出力（IIFE 1 ファイル）
 ```
 
 このリポジトリの `tools/setup.js` は `plugins/{Name}/src` を `ablogcms/extension/plugins/{Name}` にシンボリックリンクします。そのため、ブラウザから読み込むファイルは必ず `src/` の下に置きます。
 
-- **JS**: Vite のライブラリモードで `src/assets/dist/archives-to-media.js`（ES module）を出力します。React 19 と `@ablogcms/components` はバンドルに含めます（管理画面側の React を共有する公開 API が無いため）。
+- **JS**: Vite のライブラリモードで `src/assets/dist/archives-to-media.js`（IIFE。通常の `<script>`）を出力します。React・react-dom・`@ablogcms/components` の部品は、コア（3.2.38 以上）が `ACMS.Library`（`React` / `ReactJsxRuntime` / `ReactDom` / `ReactDomClient` / `components[<サブパス>]`）で公開しているものを使い、バンドルに含めません（約 495KB → 約 52KB）。
+  - external にする対象は `vite.config.ts` の `EXPOSED_COMPONENTS`（コアが公開している部品の一覧）に載っているサブパスだけです。公開されていない部品（`select`）は、external にすると実行時に undefined になるので同梱します。
+  - external の部品は名前空間のまま渡るので、`import { Alert } from '@ablogcms/components/alert'` のように**名前付き import**にします（既定の import だと壊れる。ESLint の `no-restricted-imports` で防ぎます。`select` だけは既定の import）。
+  - 全体を `ACMS.adminReady`（acms.js が同期で定義し、admin.js の初期化後に発火。後から呼んでも即時に実行）の中で実行します。コアが古く `ACMS.Library.ReactDom` / `components` が無いときは、何も描画せず `console.info` で必要なバージョンを案内します。
+  - `react` / `react-dom` / `@ablogcms/components` は実行時にはコアのものを使うので、`devDependencies`（型とテスト用）に置きます。
 - **CSS**: Sass は使わず、素の CSS ファイル（`src/assets/css/archives-to-media.css`）を 1 枚そのまま配信します。見た目の大半は、管理画面の `acms-admin.css` にある、コンポーネントが出力するクラス（`acms-admin-*`）でまかなえます。独自 CSS は、components に無い部品（ステッパー、統計タイル、ログ表示）だけにします。
    - クラスはすべて `acms-admin-a2m-` 接頭辞にする（管理画面のクラス体系 `acms-admin-*` に並べつつ、`a2m` を挟んでコアのクラスと衝突させない）。
    - 色や余白は `:root` ではなく `.a2m-root` にスコープしたカスタムプロパティで持つ（管理画面のほかの画面を汚さない）。
@@ -320,7 +324,6 @@ public function init()
     Asset::script('archives-to-media', $base . 'dist/archives-to-media.js', [
         'deps' => ['acms-admin'],        // 管理画面のスクリプトの後に読み込む
         'position' => 'body_end',
-        'attrs' => ['type' => 'module'],
     ]);
 }
 ```
@@ -337,7 +340,7 @@ public function init()
 - ハンドルはプラグイン名を接頭辞にして、ほかのプラグインと重複させない（重複すると後から登録した方が無視される）。
 - 標準ハンドル（`acms-admin` など）を `dequeue()` しない。
 - 初期データは JSON の script タグで渡し、React 側の `main.tsx` で `JSON.parse` する。`json_encode` は `JSON_HEX_TAG` 相当のエスケープをかけて、`</script>` の混入を防ぐ。
-- `checkRequirements()` では、アセット API（3.2.29 以降）が使えることを `class_exists(\Acms\Services\Facades\Asset::class)` で確かめる。
+- `checkRequirements()` では、コアの `VERSION` が 3.2.38 以上であること（`Services/Requirements`）と、アセット API が使えること（`class_exists(\Acms\Services\Facades\Asset::class)`）を確かめる。
 
 ## 7. データ設計
 
