@@ -34,7 +34,7 @@ class FieldGroupAppender
         }
         foreach ($groups as $key => $rows) {
             $values = array_map(static fn (array $r): string => Cast::str($r['field_value']), $rows);
-            if (!in_array($fd, $values, true) || in_array($dest, $values, true)) {
+            if (!$this->declares($values, $fd) || in_array($dest, $values, true)) {
                 continue;
             }
             $maxSort = max(array_map(static fn (array $r): int => Cast::int($r['field_sort']), $rows));
@@ -46,5 +46,21 @@ class FieldGroupAppender
             $added[] = $new;
         }
         return $added;
+    }
+
+    /**
+     * グループの項目に $fd が含まれるか。画像・ファイルは、カスタムフィールドメーカーが fd@path のように
+     * 副キーで宣言する（コアは宣言された項目ごとに行を作るので、副キーを並べないと {fd@path} が行に入らない）。
+     *
+     * @param list<string> $members
+     */
+    private function declares(array $members, string $fd): bool
+    {
+        foreach ($members as $member) {
+            if ($member === $fd || str_starts_with($member, $fd . '@')) {
+                return true;
+            }
+        }
+        return false;
     }
 }

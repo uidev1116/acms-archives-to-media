@@ -24,7 +24,7 @@
 
 declare(strict_types=1);
 
-require __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../../vendor/autoload.php';
 
 \Acms\TestingFramework\Bootstrap::boot(getenv('ACMS_ROOT') ?: '/var/www/html');
 
@@ -197,6 +197,31 @@ function fieldRows(int $blogId, int $entryId, int $sort, array $kv): void
  *
  * @return array<string, string>
  */
+/**
+ * グループの項目の宣言。画像・ファイルは副キー（fd@path など）まで並べる。
+ *
+ * @param array<string, 'text'|'image'|'file'> $fields
+ * @return list<string>
+ */
+function groupMembers(array $fields): array
+{
+    $members = [];
+    foreach ($fields as $fd => $kind) {
+        $members = [...$members, ...match ($kind) {
+            'image' => array_map(
+                static fn (string $sub): string => $fd . '@' . $sub,
+                ['path', 'x', 'y', 'alt', 'fileSize', 'largePath', 'largeX', 'largeY', 'largeAlt', 'largeFileSize', 'tinyPath', 'tinyX', 'tinyY', 'tinyAlt', 'tinyFileSize', 'squarePath', 'squareX', 'squareY', 'squareAlt', 'squareFileSize', 'secret'],
+            ),
+            'file' => array_map(
+                static fn (string $sub): string => $fd . '@' . $sub,
+                ['path', 'baseName', 'originalName', 'downloadName', 'fileSize', 'secret'],
+            ),
+            default => [$fd],
+        }];
+    }
+    return $members;
+}
+
 function imageField(string $fd, string $path, string $large, string $alt): array
 {
     global $archivesRoot;
@@ -258,9 +283,14 @@ fieldRows($blogId, $e2, 1, imageField('gallery', $p . 'gallery-1.jpg', '', 'ギ�
 fieldRows($blogId, $e2, 2, imageField('gallery', $p . 'gallery-2.jpg', $p . 'large-gallery-2.jpg', 'ギャラリー 2'));
 fieldRows($blogId, $e2, 1, imageField('legacy', $p . 'gone.jpg', '', '消えた画像'));
 fieldRows($blogId, $e2, 1, fileField('attachment', $p . 'estimate.pdf', '見積書.pdf'));
-fieldRows($blogId, $e2, 1, ['@gallery_group' => 'gallery']);
-fieldRows($blogId, $e2, 1, ['@profile' => 'hero']);
-fieldRows($blogId, $e2, 2, ['@profile' => 'caption']);
+// グループの項目は、カスタムフィールドメーカーと同じく、画像・ファイルは fd@path などの副キーで宣言する
+// （コアは宣言された項目ごとに行を作るので、副キーが無いと {fd@path} が行に入らない）
+foreach (groupMembers(['gallery' => 'image']) as $i => $member) {
+    fieldRows($blogId, $e2, $i + 1, ['@gallery_group' => $member]);
+}
+foreach (groupMembers(['hero' => 'image', 'caption' => 'text']) as $i => $member) {
+    fieldRows($blogId, $e2, $i + 1, ['@profile' => $member]);
+}
 
 // 3. 編集ロック中
 $e3 = entry($blogId, 'a2m-locked', '編集ロック中のエントリー', ['entry_lock_uid' => 1, 'entry_lock_datetime' => $now]);
@@ -323,7 +353,7 @@ foreach ($ownerIds as $col => $ownerId) {
     foreach ($rows as $key => $value) {
         q('INSERT INTO ' . t('field') . ' (field_key, field_value, field_type, field_sort, field_search, field_eid, field_' . $col . ', field_blog_id) VALUES (?, ?, NULL, 1, \'off\', NULL, ?, ?)', [$key, $value, $ownerId, $blogId], 'exec');
     }
-    foreach (['ownertitle', 'ownerphoto', 'ownerdoc'] as $i => $fd) {
+    foreach (groupMembers(['ownertitle' => 'text', 'ownerphoto' => 'image', 'ownerdoc' => 'file']) as $i => $fd) {
         q('INSERT INTO ' . t('field') . ' (field_key, field_value, field_type, field_sort, field_search, field_eid, field_' . $col . ', field_blog_id) VALUES (\'@owner\', ?, NULL, ?, \'off\', NULL, ?, ?)', [$fd, $i + 1, $ownerId, $blogId], 'exec');
     }
 }

@@ -127,6 +127,23 @@ final class FieldMediaConverterTest extends A2mTestCase
     }
 
     #[Test]
+    public function グループの項目が副キーで宣言されていても書き込み先が追記される(): void
+    {
+        // カスタムフィールドメーカーの画像グループは、gallery ではなく gallery@path などで宣言する
+        $this->insertImageField('hero', '001/a.jpg');
+        $this->insertField('@news', 'title', 1, ['field_search' => 'off']);
+        $this->insertField('@news', 'hero@path', 2, ['field_search' => 'off']);
+        $this->insertField('@news', 'hero@alt', 3, ['field_search' => 'off']);
+
+        $after = $this->fieldConverter()->apply($this->candidate(), [42], Opts::suffix());
+
+        $groups = $this->db->all('SELECT field_value FROM ' . $this->db->t('field') . ' WHERE field_eid = ? AND field_key = \'@news\' ORDER BY field_sort', [$this->entryId]);
+        $this->assertSame(['title', 'hero@path', 'hero@alt', 'hero_media'], array_map(static fn ($r) => $r['field_value'], $groups));
+        $this->assertIsArray($after['groupAdded']);
+        $this->assertCount(1, $after['groupAdded']);
+    }
+
+    #[Test]
     public function グループ追記をオフにできる(): void
     {
         $this->insertImageField('hero', '001/a.jpg');
