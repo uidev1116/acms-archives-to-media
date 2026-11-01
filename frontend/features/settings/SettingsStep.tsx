@@ -18,6 +18,7 @@ import type {
   OwnerType,
   TargetType,
 } from '../../types';
+import FieldKeyInput from './FieldKeyInput';
 import { ALL_ENTRY_STATUS, ALL_OWNERS, ALL_TARGETS, toJobOptions, validateForm } from './options';
 import type { FormState } from './options';
 
@@ -57,6 +58,9 @@ function toggle<T>(list: T[], item: T, order: T[]): T[] {
 export function SettingsStep({ definitions, value, onChange, onSubmit, busy = false }: Props) {
   const [errors, setErrors] = useState<string[]>([]);
   const [confirmSame, setConfirmSame] = useState(false);
+  const detectedKeys = [
+    ...new Set([...definitions.fieldKeys.image, ...definitions.fieldKeys.file]),
+  ];
   const set = <K extends keyof FormState>(key: K, v: FormState[K]) =>
     onChange({ ...value, [key]: v });
 
@@ -196,26 +200,22 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
             onChange={(e) => set('removeLegacyKeys', e.target.checked)}
           />
         )}
-        <div className="acms-admin-a2m-block">
-          <label htmlFor="a2m-include">対象にするフィールド名（空なら全部）</label>
-          <Input
-            id="a2m-include"
-            aria-label="対象にするフィールド名（空なら全部）"
-            value={value.includeKeysText}
-            onChange={(e) => set('includeKeysText', e.target.value)}
-          />
-          <p className="acms-admin-a2m-muted">
-            検出済み: 画像 {definitions.fieldKeys.image.join(', ') || 'なし'} / ファイル{' '}
-            {definitions.fieldKeys.file.join(', ') || 'なし'}
-          </p>
-          <label htmlFor="a2m-exclude">除外するフィールド名</label>
-          <Input
-            id="a2m-exclude"
-            aria-label="除外するフィールド名"
-            value={value.excludeKeysText}
-            onChange={(e) => set('excludeKeysText', e.target.value)}
-          />
-        </div>
+        <FieldKeyInput
+          id="a2m-include"
+          label="対象にするフィールド名（空なら全部）"
+          value={value.includeKeysText}
+          onChange={(v) => set('includeKeysText', v)}
+          candidates={detectedKeys}
+          hint="下の検出済みの名前を押すと追加・解除できます。空なら全フィールドが対象です"
+        />
+        <FieldKeyInput
+          id="a2m-exclude"
+          label="除外するフィールド名"
+          value={value.excludeKeysText}
+          onChange={(v) => set('excludeKeysText', v)}
+          candidates={detectedKeys}
+          hint="ここに挙げた名前は変換しません。対象の指定より優先されます"
+        />
         <Checkbox
           label="フィールドグループの定義に追記する"
           checked={value.appendToGroup}

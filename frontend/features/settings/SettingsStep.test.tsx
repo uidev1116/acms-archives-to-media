@@ -170,6 +170,21 @@ describe('SettingsStep', () => {
     expect((onSubmit.mock.calls[0]?.[0] as JobOptions).field.removeLegacyKeys).toBe(false);
   });
 
+  it('検出済みのフィールド名を押すと、除外するフィールド名へ複数追加・解除できる', async () => {
+    const onSubmit = vi.fn();
+    render(<Harness onSubmit={onSubmit} />);
+    const group = screen.getByRole('group', { name: '除外するフィールド名の候補' });
+    await userEvent.click(within(group).getByRole('button', { name: 'hero' }));
+    await userEvent.click(within(group).getByRole('button', { name: 'doc' }));
+    expect(screen.getByLabelText('除外するフィールド名')).toHaveValue('hero, doc');
+    expect(within(group).getByRole('button', { name: 'hero' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await userEvent.click(within(group).getByRole('button', { name: 'hero' }));
+    expect(screen.getByLabelText('除外するフィールド名')).toHaveValue('doc');
+  });
+
   it('入力に問題があるとエラーを表示して送信しない', async () => {
     const onSubmit = vi.fn();
     render(<Harness onSubmit={onSubmit} initial={{ targets: [] }} />);
