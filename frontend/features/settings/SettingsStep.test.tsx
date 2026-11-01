@@ -200,8 +200,8 @@ describe('SettingsStep', () => {
     await userEvent.click(screen.getByLabelText('新規メディアに alt・キャプションを設定する'));
     await userEvent.selectOptions(screen.getByLabelText('拡大表示'), 'no');
     const tags = screen.getByLabelText('新規メディアに付けるタグ');
-    await userEvent.clear(tags);
-    await userEvent.type(tags, 'a, b');
+    await userEvent.type(tags, '{Backspace}a{Enter}');
+    await userEvent.type(tags, 'b{Enter}');
     await userEvent.click(screen.getByLabelText('ゴミ箱のエントリー'));
     await userEvent.click(screen.getByLabelText('カテゴリー'));
     await userEvent.type(

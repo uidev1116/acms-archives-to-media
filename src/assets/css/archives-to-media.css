@@ -119,6 +119,11 @@
   margin-block: var(--a2m-gap-small);
 }
 
+.acms-admin-a2m-root .acms-admin-a2m-block > label {
+  display: block;
+  margin-block-end: 4px;
+}
+
 .acms-admin-a2m-root .acms-admin-a2m-textarea {
   inline-size: 100%;
   max-inline-size: 32rem;

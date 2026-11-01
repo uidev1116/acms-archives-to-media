@@ -250,15 +250,15 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
             <option value="no">拡大しない</option>
           </Select>
         </div>
-        <div className="acms-admin-a2m-inline">
-          <label htmlFor="a2m-tags">新規メディアに付けるタグ</label>
-          <Input
-            id="a2m-tags"
-            aria-label="新規メディアに付けるタグ"
-            value={value.tagsText}
-            onChange={(e) => set('tagsText', e.target.value)}
-          />
-        </div>
+        <FieldKeyInput
+          id="a2m-tags"
+          label="新規メディアに付けるタグ"
+          value={value.tagsText}
+          onChange={(v) => set('tagsText', v)}
+          candidates={[]}
+          placeholder="入力して Enter（複数可）"
+          hint="新しく作るメディアにだけ付きます"
+        />
       </Fieldset>
 
       <Fieldset legend="対象のエントリーの状態">
