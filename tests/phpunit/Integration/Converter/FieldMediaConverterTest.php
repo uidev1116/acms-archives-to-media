@@ -144,6 +144,28 @@ final class FieldMediaConverterTest extends A2mTestCase
     }
 
     #[Test]
+    public function 同名モードでもグループへ追記され_ロールバックで戻る(): void
+    {
+        $this->insertImageField('hero', '001/a.jpg');
+        $this->insertField('@news', 'title', 1, ['field_search' => 'off']);
+        $this->insertField('@news', 'hero@path', 2, ['field_search' => 'off']);
+        $this->insertField('@news', 'hero@alt', 3, ['field_search' => 'off']);
+        $sql = 'SELECT * FROM ' . $this->db->t('field') . ' WHERE field_eid = ? ORDER BY field_key, field_sort, field_value';
+        $original = $this->db->all($sql, [$this->entryId]);
+        $opts = JobOptions::fromArray(['field' => ['mode' => 'same']]);
+        $conv = $this->fieldConverter();
+        $before = $conv->snapshot($this->locator(), $opts);
+        $after = $conv->apply($this->candidate(), [42], $opts);
+
+        $groups = $this->db->all('SELECT field_value FROM ' . $this->db->t('field') . ' WHERE field_eid = ? AND field_key = \'@news\' ORDER BY field_sort', [$this->entryId]);
+        $this->assertSame(['title', 'hero@path', 'hero@alt', 'hero'], array_map(static fn ($r) => $r['field_value'], $groups));
+
+        $conv->restore($this->locator(), (array) $before, $after, $opts);
+
+        $this->assertEquals($original, $this->db->all($sql, [$this->entryId]));
+    }
+
+    #[Test]
     public function グループ追記をオフにできる(): void
     {
         $this->insertImageField('hero', '001/a.jpg');
