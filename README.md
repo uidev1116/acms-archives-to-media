@@ -117,14 +117,22 @@ a-blog cms の `archives/` 配下の画像・ファイルを参照している�
 別名モードで変換したあとは、結果画面の「テンプレート移行のヒント」に、フィールドごとの書き換え例が出ます。
 
 ```html
-<!-- 旧 -->
+<!-- 旧（標準テンプレート） -->
 <img src="%{ARCHIVES_DIR}{hero@path}" alt="{hero@alt}" />
 
-<!-- 新 -->
+<!-- 新（標準テンプレート） -->
 <img src="%{MEDIA_ARCHIVES_DIR}{hero_media@path}" alt="{hero_media@alt}" />
 ```
 
-標準テンプレートの画像の `@path` は `/media/` を含まない相対パスなので、`%{MEDIA_ARCHIVES_DIR}` を前に付けます（ファイルの `@path` はダウンロード URL そのものなので付けません）。Twig（V2 モジュール）では `@path` が `/media/` 付きの URL になるため、付けずにそのまま使います。
+```twig
+{# 旧（Twig） #}
+<img src="{{ fields.hero.value.path }}" alt="{{ fields.hero.value.alt }}" />
+
+{# 新（Twig） #}
+<img src="{{ fields.hero_media.value.path }}" alt="{{ fields.hero_media.value.alt }}" />
+```
+
+標準テンプレートの画像の `@path` は `/media/` を含まない相対パスなので、`%{MEDIA_ARCHIVES_DIR}` を前に付けます（ファイルの `@path` はダウンロード URL そのものなので付けません）。Twig（V2 モジュール）の `path` は最初からルートからのパス（`/media/…`）なので、何も付けません。グループの中では `row.hero_media.path` のように書きます。
 
 入力欄は、メディアフィールドの書き方（`js-media-field`）に置き換えます。ヒントの「コピー」ボタンで、表示側と入力欄をまとめてコピーできます。ヒントは固定の書き換え例を表示するだけで、テンプレートの中身は読んでいません。
 

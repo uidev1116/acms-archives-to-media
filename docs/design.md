@@ -250,8 +250,10 @@ UI モック（4 パターン）はローカル用の HTML（`docs/ui-mock.html`
 テンプレートは書き換えませんが、変換結果の画面には「旧変数 → 新変数」の対応表を**表示だけ**します。コピーして使えます。
 
 ```
-<!-- 旧 -->  <img src="%{ARCHIVES_DIR}{main_image@path}" alt="{main_image@alt}">
-<!-- 新 -->  <img src="%{MEDIA_ARCHIVES_DIR}{main_image_media@path}" alt="{main_image_media@alt}">
+<!-- 旧（標準） -->  <img src="%{ARCHIVES_DIR}{main_image@path}" alt="{main_image@alt}">
+<!-- 新（標準） -->  <img src="%{MEDIA_ARCHIVES_DIR}{main_image_media@path}" alt="{main_image_media@alt}">
+<!-- 旧（Twig） -->  <img src="{{ fields.main_image.value.path }}" alt="{{ fields.main_image.value.alt }}">
+<!-- 新（Twig） -->  <img src="{{ fields.main_image_media.value.path }}" alt="{{ fields.main_image_media.value.alt }}">
 <!-- 入力欄 --> <input type="hidden" name="main_image_media" value="{main_image_media}">
            <input type="hidden" name="main_image_media:extension" value="media">  … メディア選択 UI は公式スニペット参照
 ```

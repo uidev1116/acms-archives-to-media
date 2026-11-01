@@ -22,22 +22,31 @@ function mediaInput(dest: string, kind: 'image' | 'file'): string {
   ].join('\n');
 }
 
-function snippets(
-  fd: string,
-  dest: string,
-  kind: 'image' | 'file',
-): { old: string; next: string; input: string } {
+interface Snippets {
+  old: string;
+  next: string;
+  oldTwig: string;
+  nextTwig: string;
+  input: string;
+}
+
+function snippets(fd: string, dest: string, kind: 'image' | 'file'): Snippets {
+  const input = mediaInput(dest, kind);
   if (kind === 'image') {
     return {
       old: `<img src="%{ARCHIVES_DIR}{${fd}@path}" alt="{${fd}@alt}">`,
       next: `<img src="%{MEDIA_ARCHIVES_DIR}{${dest}@path}" alt="{${dest}@alt}">`,
-      input: mediaInput(dest, kind),
+      oldTwig: `<img src="{{ fields.${fd}.value.path }}" alt="{{ fields.${fd}.value.alt }}">`,
+      nextTwig: `<img src="{{ fields.${dest}.value.path }}" alt="{{ fields.${dest}.value.alt }}">`,
+      input,
     };
   }
   return {
     old: `<a href="%{ARCHIVES_DIR}{${fd}@path}">{${fd}@baseName}</a>`,
     next: `<a href="{${dest}@path}">{${dest}@name}</a>`,
-    input: mediaInput(dest, kind),
+    oldTwig: `<a href="{{ fields.${fd}.value.path }}">{{ fields.${fd}.value.baseName }}</a>`,
+    nextTwig: `<a href="{{ fields.${dest}.value.path }}">{{ fields.${dest}.value.name }}</a>`,
+    input,
   };
 }
 
@@ -69,7 +78,7 @@ export function TemplateHints({ fieldKeys, field }: Props) {
       {rows.map(({ fd, kind }) => {
         const dest = destName(fd, field);
         const s = snippets(fd, dest, kind);
-        const text = `${s.next}\n${s.input}`;
+        const text = `${s.next}\n${s.nextTwig}\n${s.input}`;
         return (
           <div key={`${kind}-${fd}`} className="acms-admin-a2m-hint">
             <h4>
@@ -82,7 +91,7 @@ export function TemplateHints({ fieldKeys, field }: Props) {
                 モジュール）ではすでに <code>/media/</code> 付きの URL なので、そのまま使います。
               </p>
             )}
-            <pre className="acms-admin-a2m-code">{`<!-- 旧 -->  ${s.old}\n<!-- 新 -->  ${s.next}\n<!-- 入力欄 -->\n${s.input}`}</pre>
+            <pre className="acms-admin-a2m-code">{`<!-- 旧（標準） -->  ${s.old}\n<!-- 新（標準） -->  ${s.next}\n<!-- 旧（Twig） -->  ${s.oldTwig}\n<!-- 新（Twig） -->  ${s.nextTwig}\n<!-- 入力欄 -->\n${s.input}`}</pre>
             <Button
               size="small"
               aria-label={`${fd} の新しい書き方をコピー`}

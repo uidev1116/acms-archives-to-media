@@ -32,6 +32,12 @@ describe('TemplateHints', () => {
     expect(screen.getAllByText(/を前に付けます/)).toHaveLength(1);
   });
 
+  it('Twig の書き方も旧・新の両方を出す', () => {
+    render(<TemplateHints fieldKeys={{ image: ['hero'], file: ['doc'] }} field={field} />);
+    expect(screen.getByText(/fields\.hero_media\.value\.path/)).toBeInTheDocument();
+    expect(screen.getByText(/\{\{ fields\.doc_media\.value\.name \}\}/)).toBeInTheDocument();
+  });
+
   it('同名モードでは変数名は変わらない旨を表示する', () => {
     render(
       <TemplateHints
