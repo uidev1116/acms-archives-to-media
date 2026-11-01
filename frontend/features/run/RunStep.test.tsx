@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
 import { fakeClient, renderWithApi } from '../../test/helpers';
 import type { ChunkResult } from '../../types';
-import { RunStep } from './RunStep';
+import { estimateRemaining, RunStep } from './RunStep';
 
 function chunk(over: Partial<ChunkResult>): ChunkResult {
   return {
@@ -173,5 +173,15 @@ describe('RunStep', () => {
     });
     renderWithApi(<RunStep jobId={4} total={0} onFinished={vi.fn()} />, client);
     expect(await screen.findByText('0 / 0 件')).toBeInTheDocument();
+  });
+});
+
+describe('estimateRemaining', () => {
+  it('進みが少ない・終わっているときは出さず、それ以外は秒か分で返す', () => {
+    expect(estimateRemaining(2, 100, 10000)).toBeNull();
+    expect(estimateRemaining(50, 100, 1000)).toBeNull();
+    expect(estimateRemaining(100, 100, 60000)).toBeNull();
+    expect(estimateRemaining(50, 100, 10000)).toBe('10 秒');
+    expect(estimateRemaining(10, 100, 60000)).toBe('9 分');
   });
 });

@@ -42,7 +42,8 @@ async function clickScan() {
   await userEvent.click(screen.getByRole('button', { name: 'スキャンして確認へ' }));
   const dialog = screen.queryByRole('dialog');
   if (dialog !== null) {
-    await userEvent.click(within(dialog).getByRole('button', { name: '理解して続ける' }));
+    await userEvent.click(within(dialog).getByRole('checkbox'));
+    await userEvent.click(within(dialog).getByRole('button', { name: '続ける' }));
   }
 }
 
@@ -61,9 +62,10 @@ describe('SettingsStep', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'スキャンして確認へ' }));
     expect(onSubmit).not.toHaveBeenCalled();
-    await userEvent.click(
-      within(await screen.findByRole('dialog')).getByRole('button', { name: '理解して続ける' }),
-    );
+    const confirm = within(await screen.findByRole('dialog'));
+    expect(confirm.getByRole('button', { name: '続ける' })).toBeDisabled();
+    await userEvent.click(confirm.getByRole('checkbox'));
+    await userEvent.click(confirm.getByRole('button', { name: '続ける' }));
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
     const o = onSubmit.mock.calls[0]?.[0] as JobOptions;
@@ -151,9 +153,10 @@ describe('SettingsStep', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
     await userEvent.click(screen.getByRole('button', { name: 'スキャンして確認へ' }));
-    await userEvent.click(
-      within(await screen.findByRole('dialog')).getByRole('button', { name: '理解して続ける' }),
-    );
+    const confirm = within(await screen.findByRole('dialog'));
+    expect(confirm.getByRole('button', { name: '続ける' })).toBeDisabled();
+    await userEvent.click(confirm.getByRole('checkbox'));
+    await userEvent.click(confirm.getByRole('button', { name: '続ける' }));
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect((onSubmit.mock.calls[0]?.[0] as JobOptions).field.removeLegacyKeys).toBe(true);
   });
@@ -164,9 +167,10 @@ describe('SettingsStep', () => {
     await userEvent.click(screen.getByLabelText(/同名/));
     await userEvent.click(screen.getByLabelText('旧キー（@path など）を削除する'));
     await userEvent.click(screen.getByRole('button', { name: 'スキャンして確認へ' }));
-    await userEvent.click(
-      within(await screen.findByRole('dialog')).getByRole('button', { name: '理解して続ける' }),
-    );
+    const confirm = within(await screen.findByRole('dialog'));
+    expect(confirm.getByRole('button', { name: '続ける' })).toBeDisabled();
+    await userEvent.click(confirm.getByRole('checkbox'));
+    await userEvent.click(confirm.getByRole('button', { name: '続ける' }));
     expect((onSubmit.mock.calls[0]?.[0] as JobOptions).field.removeLegacyKeys).toBe(false);
   });
 

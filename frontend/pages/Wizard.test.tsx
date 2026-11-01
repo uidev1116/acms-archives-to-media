@@ -68,7 +68,8 @@ async function goToScan() {
   // 既定は同名モードなので、確認ダイアログに同意して進む
   const dialog = screen.queryByRole('dialog');
   if (dialog !== null) {
-    await userEvent.click(within(dialog).getByRole('button', { name: '理解して続ける' }));
+    await userEvent.click(within(dialog).getByRole('checkbox'));
+    await userEvent.click(within(dialog).getByRole('button', { name: '続ける' }));
   }
 }
 

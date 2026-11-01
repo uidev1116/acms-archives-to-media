@@ -1,5 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
 import type { SummaryRow } from '../../types';
 import { ScanSummary } from './ScanSummary';
 
@@ -39,6 +40,15 @@ describe('ScanSummary', () => {
     render(<ScanSummary summary={summary} />);
     expect(screen.getByText('元ファイルが見つかりません')).toBeInTheDocument();
     expect(screen.getByText('SOURCE_NOT_FOUND')).toBeInTheDocument();
+  });
+
+  it('理由を押すと絞り込みを依頼し、選択中は押された状態になる', async () => {
+    const onPick = vi.fn();
+    render(<ScanSummary summary={summary} activeReason="SOURCE_NOT_FOUND" onPickReason={onPick} />);
+    const button = screen.getByRole('button', { name: /元ファイルが見つかりません/ });
+    expect(button).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(button);
+    expect(onPick).toHaveBeenCalledWith('SOURCE_NOT_FOUND');
   });
 
   it('候補が無いときはその旨を表示する', () => {

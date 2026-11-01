@@ -165,7 +165,8 @@
 
 .acms-admin-a2m-root .acms-admin-a2m-reasons {
   margin-block: var(--a2m-gap-small);
-  padding-inline-start: 1.25rem;
+  padding: 0;
+  list-style: none;
 }
 
 /* 実行の進捗とログ */
@@ -261,4 +262,18 @@
 
 .acms-admin-a2m-root .acms-admin-a2m-progress > :last-child {
   align-self: stretch;
+}
+
+.acms-admin-a2m-root .acms-admin-a2m-details {
+  margin-block: var(--a2m-gap);
+}
+
+.acms-admin-a2m-root .acms-admin-a2m-details > summary {
+  margin-block-end: var(--a2m-gap-small);
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.acms-admin-a2m-root .acms-admin-a2m-reasons li {
+  margin-block: 0.25rem;
 }

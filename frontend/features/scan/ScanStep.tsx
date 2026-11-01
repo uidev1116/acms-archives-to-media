@@ -27,6 +27,7 @@ export function ScanStep({ jobId, onBack, onProceed }: Props) {
   const [confirming, setConfirming] = useState(false);
   const [backedUp, setBackedUp] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [reason, setReason] = useState('');
 
   const runner = useChunkRunner<ScanResult>(() => api.call<ScanResult>('scan', { jobId }), {
     onResult: (r) => setFound(r.total),
@@ -79,8 +80,15 @@ export function ScanStep({ jobId, onBack, onProceed }: Props) {
           <Alert variant="info" role="note">
             スキャンでは何も書き換えません。新規登録・再利用の見込みは、内容のハッシュで判定しています。
           </Alert>
-          <ScanSummary summary={detail.summary} />
+          <ScanSummary
+            summary={detail.summary}
+            activeReason={reason}
+            onPickReason={(code) => setReason((cur) => (cur === code ? '' : code))}
+          />
           <ItemTable
+            key={reason}
+            initialReason={reason}
+            initialStatus={reason === '' ? '' : 'skipped'}
             jobId={jobId}
             editable
             reloadKey={reloadKey}

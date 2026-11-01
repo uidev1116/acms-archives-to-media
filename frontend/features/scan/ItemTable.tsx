@@ -36,20 +36,24 @@ interface Props {
   onChanged?: () => void;
   /** 状態の絞り込みの初期値 */
   initialStatus?: string;
+  /** スキップ理由の絞り込みの初期値 */
+  initialReason?: string;
 }
 
 interface Filters {
   target: string;
   status: string;
+  reason: string;
   q: string;
 }
 
-const NO_FILTER: Filters = { target: '', status: '', q: '' };
+const NO_FILTER: Filters = { target: '', status: '', reason: '', q: '' };
 
 function activeFilter(f: Filters): Record<string, string> {
   const out: Record<string, string> = {};
   if (f.target !== '') out.target = f.target;
   if (f.status !== '') out.status = f.status;
+  if (f.reason !== '') out.reason = f.reason;
   if (f.q !== '') out.q = f.q;
   return out;
 }
@@ -60,10 +64,19 @@ export function ItemTable({
   reloadKey = 0,
   onChanged,
   initialStatus = '',
+  initialReason = '',
 }: Props) {
   const api = useApi();
-  const [draft, setDraft] = useState<Filters>({ ...NO_FILTER, status: initialStatus });
-  const [applied, setApplied] = useState<Filters>({ ...NO_FILTER, status: initialStatus });
+  const [draft, setDraft] = useState<Filters>({
+    ...NO_FILTER,
+    status: initialStatus,
+    reason: initialReason,
+  });
+  const [applied, setApplied] = useState<Filters>({
+    ...NO_FILTER,
+    status: initialStatus,
+    reason: initialReason,
+  });
   const [pageNo, setPageNo] = useState(1);
   const [data, setData] = useState<ItemsPage | null>(null);
   const [error, setError] = useState<string | null>(null);

@@ -1,7 +1,9 @@
 import { Alert } from '@ablogcms/components/alert';
+import { Badge } from '@ablogcms/components/badge';
 import { Button } from '@ablogcms/components/button';
 import { ProgressBar } from '@ablogcms/components/progress-bar';
 import { useEffect, useRef, useState } from 'react';
+import { itemStatusVariant } from '../../labels';
 import { useApi } from '../../api/context';
 import { useChunkRunner } from '../../hooks/useChunkRunner';
 import type { ChunkResult, LogEntry } from '../../types';
@@ -18,20 +20,35 @@ interface Props {
 
 const MAX_LOG = 200;
 
+/** これまでの速さから残り時間の目安を作る。進みが少ないうちは出さない */
+export function estimateRemaining(done: number, total: number, elapsedMs: number): string | null {
+  if (done < 5 || done >= total || elapsedMs < 3000) return null;
+  const seconds = Math.ceil(((total - done) * elapsedMs) / done / 1000);
+  return seconds < 60 ? `${seconds} 秒` : `${Math.ceil(seconds / 60)} 分`;
+}
+
 export function RunStep({ jobId, total, onFinished, action = 'run', extraParams }: Props) {
   const api = useApi();
   const [counts, setCounts] = useState({ converted: 0, skipped: 0, error: 0 });
   const [log, setLog] = useState<LogEntry[]>([]);
+  const startedAt = useRef<number | null>(null);
+  const doneRef = useRef(0);
+  const [remaining, setRemaining] = useState<string | null>(null);
 
   const runner = useChunkRunner<ChunkResult>(
     () => api.call<ChunkResult>(action, { jobId, ...extraParams }),
     {
       onResult: (r) => {
+        const now = Date.now();
+        startedAt.current ??= now;
         setCounts((c) => ({
           converted: c.converted + r.converted,
           skipped: c.skipped + r.skipped,
           error: c.error + r.error,
         }));
+        doneRef.current += r.converted + r.skipped + r.error;
+        const done = doneRef.current;
+        setRemaining(estimateRemaining(done, Math.max(total, done), now - startedAt.current));
         setLog((cur) => [...cur, ...r.log].slice(-MAX_LOG));
       },
     },
@@ -78,14 +95,15 @@ export function RunStep({ jobId, total, onFinished, action = 'run', extraParams 
 
       <ProgressBar value={percent} striped animated={runner.running} label={`${percent}%`} />
       <p className="acms-admin-a2m-count">
-        {done} / {denominator} 件
+        {done} / {denominator} 件{remaining !== null && `（残り約 ${remaining}）`}
       </p>
       <p className="acms-admin-a2m-stats">
-        <span>
+        <Badge variant={itemStatusVariant('converted')}>
           {action === 'run' ? '変換済み' : action === 'rollback' ? '復元済み' : '削除済み'}{' '}
           {counts.converted}
-        </span>{' '}
-        <span>スキップ {counts.skipped}</span> <span>エラー {counts.error}</span>
+        </Badge>{' '}
+        <Badge variant={itemStatusVariant('skipped')}>スキップ {counts.skipped}</Badge>{' '}
+        <Badge variant={itemStatusVariant('error')}>エラー {counts.error}</Badge>
       </p>
 
       {runner.paused && (

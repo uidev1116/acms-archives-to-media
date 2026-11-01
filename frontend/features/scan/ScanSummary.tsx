@@ -6,6 +6,7 @@ import {
   TableHeader,
   TableRow,
 } from '@ablogcms/components/table';
+import { Button } from '@ablogcms/components/button';
 import { TARGET_LABEL } from '../../labels';
 import type { SummaryRow, TargetType } from '../../types';
 
@@ -59,7 +60,14 @@ function tally(rows: SummaryRow[]): Record<string, Tally> {
   return out;
 }
 
-export function ScanSummary({ summary }: { summary: SummaryRow[] }) {
+interface Props {
+  summary: SummaryRow[];
+  /** スキップ理由で一覧を絞り込む。指定がなければ表示だけ */
+  activeReason?: string;
+  onPickReason?: (code: string) => void;
+}
+
+export function ScanSummary({ summary, activeReason = '', onPickReason }: Props) {
   if (summary.length === 0) {
     return <p className="acms-admin-a2m-muted">変換できる候補は見つかりませんでした。</p>;
   }
@@ -113,7 +121,20 @@ export function ScanSummary({ summary }: { summary: SummaryRow[] }) {
         <ul className="acms-admin-a2m-reasons">
           {[...reasons.entries()].map(([code, count]) => (
             <li key={code}>
-              <code>{code}</code> <span>{REASON_LABEL[code] ?? code}</span>（{count} 件）
+              {onPickReason === undefined ? (
+                <>
+                  <code>{code}</code> <span>{REASON_LABEL[code] ?? code}</span>（{count} 件）
+                </>
+              ) : (
+                <Button
+                  size="small"
+                  variant={activeReason === code ? 'primary' : undefined}
+                  aria-pressed={activeReason === code}
+                  onClick={() => onPickReason(code)}
+                >
+                  <code>{code}</code> <span>{REASON_LABEL[code] ?? code}</span>（{count} 件）
+                </Button>
+              )}
             </li>
           ))}
         </ul>

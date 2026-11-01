@@ -40,11 +40,11 @@ const ENTRY_STATUS_LABEL: Record<EntryStatus, string> = {
 const FIELD_MODES: { value: FieldMode; label: string }[] = [
   {
     value: 'same',
-    label: '同名のフィールドに書き込む（既定。テンプレートの同時差し替えが必要）',
+    label: '一気に移行する（同名のフィールドに書き込む。テンプレートの同時差し替えが必要）',
   },
   {
     value: 'suffix',
-    label: '別名のフィールドに書き込む（旧データを残して段階的に移行）',
+    label: '安全に試す（別名のフィールドに書き込み、旧データを残して段階的に移行）',
   },
   { value: 'custom', label: 'カスタム（書き込み先を個別に指定）' },
 ];
@@ -57,6 +57,11 @@ function toggle<T>(list: T[], item: T, order: T[]): T[] {
 export function SettingsStep({ definitions, value, onChange, onSubmit, busy = false }: Props) {
   const [errors, setErrors] = useState<string[]>([]);
   const [confirmSame, setConfirmSame] = useState(false);
+  const [ready, setReady] = useState(false);
+  const closeConfirm = () => {
+    setConfirmSame(false);
+    setReady(false);
+  };
   const detectedKeys = [
     ...new Set([...definitions.fieldKeys.image, ...definitions.fieldKeys.file]),
   ];
@@ -196,6 +201,10 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
             onChange={(e) => set('removeLegacyKeys', e.target.checked)}
           />
         )}
+      </Fieldset>
+
+      <details className="acms-admin-a2m-details">
+        <summary>詳細設定</summary>
         <FieldKeyInput
           id="a2m-include"
           label="対象にするフィールド名（空なら全部）"
@@ -217,75 +226,75 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
           checked={value.appendToGroup}
           onChange={(e) => set('appendToGroup', e.target.checked)}
         />
-      </Fieldset>
 
-      <Fieldset legend="オプション">
-        <div className="acms-admin-a2m-checks acms-admin-a2m-checks--column">
-          <Checkbox
-            label="リビジョンも変換する"
-            checked={value.includeRevisions}
-            onChange={(e) => set('includeRevisions', e.target.checked)}
-          />
-          <Checkbox
-            label="子ブログも含める"
-            checked={value.includeChildBlogs}
-            onChange={(e) => set('includeChildBlogs', e.target.checked)}
-          />
-          <Checkbox
-            label="新規メディアに alt・キャプションを設定する"
-            checked={value.fillAltOnNew}
-            onChange={(e) => set('fillAltOnNew', e.target.checked)}
-          />
-        </div>
-        <div className="acms-admin-a2m-inline">
-          <label htmlFor="a2m-enlarged">拡大表示</label>
-          <Select
-            id="a2m-enlarged"
-            aria-label="拡大表示"
-            value={value.enlarged}
-            onChange={(e) => set('enlarged', e.target.value as Enlarged)}
-          >
-            <option value="auto">自動（リンクが空で large 版があれば拡大）</option>
-            <option value="yes">常に拡大する</option>
-            <option value="no">拡大しない</option>
-          </Select>
-        </div>
-        <FieldKeyInput
-          id="a2m-tags"
-          label="新規メディアに付けるタグ"
-          value={value.tagsText}
-          onChange={(v) => set('tagsText', v)}
-          candidates={[]}
-          placeholder="入力して Enter（複数可）"
-          hint="新しく作るメディアにだけ付きます"
-        />
-      </Fieldset>
-
-      <Fieldset legend="対象のエントリーの状態">
-        <div className="acms-admin-a2m-checks">
-          {ALL_ENTRY_STATUS.map((s) => (
+        <Fieldset legend="オプション">
+          <div className="acms-admin-a2m-checks acms-admin-a2m-checks--column">
             <Checkbox
-              key={s}
-              label={ENTRY_STATUS_LABEL[s]}
-              checked={value.entryStatus.includes(s)}
-              onChange={() => set('entryStatus', toggle(value.entryStatus, s, ALL_ENTRY_STATUS))}
+              label="リビジョンも変換する"
+              checked={value.includeRevisions}
+              onChange={(e) => set('includeRevisions', e.target.checked)}
             />
-          ))}
-        </div>
-      </Fieldset>
-
-      <Fieldset legend="フィールドの所属">
-        <div className="acms-admin-a2m-checks">
-          {ALL_OWNERS.map((o: OwnerType) => (
             <Checkbox
-              key={o}
-              label={OWNER_LABEL[o] ?? o}
-              checked={value.owners.includes(o)}
-              onChange={() => set('owners', toggle(value.owners, o, ALL_OWNERS))}
+              label="子ブログも含める"
+              checked={value.includeChildBlogs}
+              onChange={(e) => set('includeChildBlogs', e.target.checked)}
             />
-          ))}
-        </div>
-      </Fieldset>
+            <Checkbox
+              label="新規メディアに alt・キャプションを設定する"
+              checked={value.fillAltOnNew}
+              onChange={(e) => set('fillAltOnNew', e.target.checked)}
+            />
+          </div>
+          <div className="acms-admin-a2m-inline">
+            <label htmlFor="a2m-enlarged">拡大表示</label>
+            <Select
+              id="a2m-enlarged"
+              aria-label="拡大表示"
+              value={value.enlarged}
+              onChange={(e) => set('enlarged', e.target.value as Enlarged)}
+            >
+              <option value="auto">自動（リンクが空で large 版があれば拡大）</option>
+              <option value="yes">常に拡大する</option>
+              <option value="no">拡大しない</option>
+            </Select>
+          </div>
+          <FieldKeyInput
+            id="a2m-tags"
+            label="新規メディアに付けるタグ"
+            value={value.tagsText}
+            onChange={(v) => set('tagsText', v)}
+            candidates={[]}
+            placeholder="入力して Enter（複数可）"
+            hint="新しく作るメディアにだけ付きます"
+          />
+        </Fieldset>
+
+        <Fieldset legend="対象のエントリーの状態">
+          <div className="acms-admin-a2m-checks">
+            {ALL_ENTRY_STATUS.map((s) => (
+              <Checkbox
+                key={s}
+                label={ENTRY_STATUS_LABEL[s]}
+                checked={value.entryStatus.includes(s)}
+                onChange={() => set('entryStatus', toggle(value.entryStatus, s, ALL_ENTRY_STATUS))}
+              />
+            ))}
+          </div>
+        </Fieldset>
+
+        <Fieldset legend="フィールドの所属">
+          <div className="acms-admin-a2m-checks">
+            {ALL_OWNERS.map((o: OwnerType) => (
+              <Checkbox
+                key={o}
+                label={OWNER_LABEL[o] ?? o}
+                checked={value.owners.includes(o)}
+                onChange={() => set('owners', toggle(value.owners, o, ALL_OWNERS))}
+              />
+            ))}
+          </div>
+        </Fieldset>
+      </details>
 
       {errors.length > 0 && (
         <Alert variant="danger" role="alert">
@@ -303,27 +312,27 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
         </Button>
       </div>
 
-      <Modal isOpen={confirmSame} onClose={() => setConfirmSame(false)} size="small">
+      <Modal isOpen={confirmSame} onClose={closeConfirm} size="small">
         <ModalHeader>同名モードで実行します</ModalHeader>
         <ModalBody>
-          <p>
-            旧キー（<code>{'{fd}@path'}</code>{' '}
-            など）を削除し、同名のメディアフィールドに置き換えます。
-            テンプレートと入力欄を同時に差し替えないと、表示が壊れたり入力欄が空に見えたりします。
-            ロールバックはできますが、先にステージングで試してください。
-          </p>
+          <Checkbox
+            label="テンプレートと入力欄を、メディア用に差し替える準備ができています"
+            checked={ready}
+            onChange={(e) => setReady(e.target.checked)}
+          />
         </ModalBody>
         <ModalFooter>
           <HStack spacing="0.5rem" justify="end">
-            <Button onClick={() => setConfirmSame(false)}>キャンセル</Button>
+            <Button onClick={closeConfirm}>キャンセル</Button>
             <Button
               variant="primary"
+              disabled={!ready}
               onClick={() => {
-                setConfirmSame(false);
+                closeConfirm();
                 onSubmit(toJobOptions(value));
               }}
             >
-              理解して続ける
+              続ける
             </Button>
           </HStack>
         </ModalFooter>
