@@ -139,7 +139,7 @@ describe('SettingsStep', () => {
     const onSubmit = vi.fn();
     render(<Harness onSubmit={onSubmit} />);
     await userEvent.click(screen.getByLabelText(/同名/));
-    expect(screen.getByText(/テンプレートを同時に差し替える/)).toBeInTheDocument();
+    expect(screen.getByText(/同時に差し替えるまで表示が壊れます/)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'スキャンして確認へ' }));
     expect(onSubmit).not.toHaveBeenCalled();

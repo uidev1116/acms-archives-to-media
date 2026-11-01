@@ -180,10 +180,13 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
           </div>
         )}
         {value.fieldMode === 'same' && (
-          <Alert variant="danger" className="acms-admin-a2m-note" role="note">
+          <Alert variant="warning" className="acms-admin-a2m-note" role="note">
             同名モードでは、メディアフィールドが表示時に <code>{'{fd}@path'}</code>{' '}
-            を上書きするため、テンプレートを同時に差し替える必要があります。
-            差し替えるまで、表示が壊れます。
+            などをメディアの値で上書きします。<code>@path</code> はメディアの URL になるので、
+            <code>{'%{ARCHIVES_DIR}{fd@path}'}</code>{' '}
+            のように前に付けているテンプレートや、旧キーのうち上書きされないもの（
+            <code>@largePath</code> など）を使うテンプレートは、同時に差し替えるまで表示が壊れます。
+            管理画面の入力欄も、メディア用の書き方に直すまで空に見えます。その状態でエントリーを保存すると、メディアの値は消えます。
           </Alert>
         )}
         {value.fieldMode === 'same' && (
@@ -310,7 +313,9 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
           <p>
             同名モードでは、旧キー（<code>{'{fd}@path'}</code>{' '}
             など）を削除し、同じ名前のメディアフィールドに置き換えます。
-            テンプレートを同時に差し替えないと、表示が壊れます。ロールバックで元に戻せますが、ステージングでの確認を強くおすすめします。
+            テンプレートを同時に差し替えないと、表示が壊れることがあります（<code>@path</code>{' '}
+            はメディアの URL になり、旧キーの <code>@largePath</code>{' '}
+            などは削除されます）。管理画面の入力欄も、メディア用に直すまで空に見えます。ロールバックで元に戻せますが、ステージングでの確認を強くおすすめします。
           </p>
         </ModalBody>
         <ModalFooter>
