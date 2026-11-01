@@ -30,7 +30,8 @@ require __DIR__ . '/../../vendor/autoload.php';
 
 use Acms\Services\Facades\Database;
 
-const BLOG_CODE = 'a2m-test';
+// 既定は a2m-test。A2M_SEED_BLOG=child のように環境変数で指定すれば、別の子ブログに同じデータを作れる
+define('BLOG_CODE', getenv('A2M_SEED_BLOG') ?: 'a2m-test');
 const UNIT_DELIM = ':acms_unit_delimiter:';
 
 /**
@@ -71,6 +72,7 @@ foreach (['column', 'column_rev', 'field', 'field_rev'] as $table) {
 foreach (['entry', 'entry_rev'] as $table) {
     q('DELETE FROM ' . t($table) . ' WHERE entry_blog_id = ?', [$blogId], 'exec');
 }
+q('DELETE FROM ' . t('media_tag') . ' WHERE media_tag_blog_id = ?', [$blogId], 'exec');
 q('DELETE FROM ' . t('media') . ' WHERE media_blog_id = ?', [$blogId], 'exec');
 q('DELETE FROM ' . t('category') . ' WHERE category_blog_id = ? AND category_code = ?', [$blogId, 'a2m-seed-category'], 'exec');
 q('DELETE FROM ' . t('module') . ' WHERE module_blog_id = ? AND module_identifier = ?', [$blogId, 'a2m_seed_module'], 'exec');
