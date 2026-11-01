@@ -86,6 +86,11 @@ class ServiceProvider extends ACMS_App
      */
     public function init()
     {
+        // 本体を古いバージョンに戻したサイトでも落ちないよう、対応外なら何も登録しない
+        if (!Requirements::isSupported(defined('VERSION') ? VERSION : null)) {
+            return;
+        }
+
         // テンプレートディレクトリ（ファイルシステムのパスなので PLUGIN_LIB_DIR）
         Twig::addTemplatePath(PLUGIN_LIB_DIR . 'ArchivesToMedia/template', 'archives_to_media');
 
@@ -93,7 +98,8 @@ class ServiceProvider extends ACMS_App
         $this->registerServices();
 
         // 自分の管理画面を開いているときだけ、差し込みとアセットの登録を行う
-        if (!defined('ADMIN') || ADMIN !== 'app_' . $this->menu) {
+        // 差し込みを描く InjectTemplate は権限を確かめないので、ここで管理者だけに絞る
+        if (!defined('ADMIN') || ADMIN !== 'app_' . $this->menu || !sessionWithAdministration()) {
             return;
         }
 
@@ -172,7 +178,7 @@ class ServiceProvider extends ACMS_App
      */
     public function install()
     {
-        (new Schema(new Db()))->install();
+        $this->guard(static fn () => (new Schema(new Db()))->install());
     }
 
     /**
@@ -181,7 +187,7 @@ class ServiceProvider extends ACMS_App
     public function uninstall()
     {
         $force = defined('ARCHIVES_TO_MEDIA_FORCE_UNINSTALL') && constant('ARCHIVES_TO_MEDIA_FORCE_UNINSTALL') === true;
-        (new Schema(new Db()))->uninstall($force);
+        $this->guard(static fn () => (new Schema(new Db()))->uninstall($force));
     }
 
     /**
@@ -189,8 +195,27 @@ class ServiceProvider extends ACMS_App
      */
     public function update()
     {
-        (new Schema(new Db()))->install(); // CREATE TABLE IF NOT EXISTS なので何度でも安全
+        // update() では checkRequirements() が呼ばれないので、ここでも対応バージョンを確かめる
+        if (!Requirements::isSupported(defined('VERSION') ? VERSION : null)) {
+            throw new \RuntimeException('ArchivesToMedia: a-blog cms ' . Requirements::MIN_ACMS_VERSION . ' 以降が必要です。');
+        }
+        $this->guard(static fn () => (new Schema(new Db()))->install()); // CREATE TABLE IF NOT EXISTS なので何度でも安全
         return true;
+    }
+
+    /**
+     * install / update / uninstall の中身。本体は Exception しか受け止めず、TypeError などの Error は画面が
+     * エラーになるので、Throwable を RuntimeException に包み直して投げる。
+     */
+    private function guard(callable $fn): void
+    {
+        try {
+            $fn();
+        } catch (\RuntimeException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            throw new \RuntimeException('ArchivesToMedia: ' . $e->getMessage(), 0, $e);
+        }
     }
 
     /**
