@@ -3,9 +3,9 @@ import { mkdirSync } from 'node:fs';
 import { chromium } from '@playwright/test';
 
 /**
- * 1. 動作確認用の子ブログ（a2m-test）を未変換の状態に作り直す（e2e/seed-a2m-test.php）。
+ * 1. 動作確認用の子ブログ（a2m-test）を未変換の状態に作り直す（tests/e2e/seed-a2m-test.php）。
  *    seed は a2m-test 以外のブログには触れない。
- * 2. 管理者でログインして、セッションを e2e/.auth/state.json に保存する。
+ * 2. 管理者でログインして、セッションを tests/e2e/.auth/state.json に保存する。
  *
  * 必要な環境変数（.env.local）: A2M_ADMIN_MAIL, A2M_ADMIN_PASS
  * 任意: A2M_BASE_URL, A2M_WEB_CONTAINER, A2M_DB_CONTAINER, A2M_DB_NAME
@@ -41,7 +41,7 @@ function reseed(): void {
     `ACMS_DB_PASS=${password}`,
     web,
     'php',
-    'e2e/seed-a2m-test.php',
+    'tests/e2e/seed-a2m-test.php',
   ]);
 }
 
@@ -52,7 +52,7 @@ export default async function globalSetup(): Promise<void> {
 
   reseed();
 
-  mkdirSync('e2e/.auth', { recursive: true });
+  mkdirSync('tests/e2e/.auth', { recursive: true });
   const browser = await chromium.launch();
   try {
     const context = await browser.newContext({ ignoreHTTPSErrors: true, locale: 'ja-JP' });
@@ -62,7 +62,7 @@ export default async function globalSetup(): Promise<void> {
     await page.locator('input[name="pass"]').fill(pass);
     await page.getByRole('button', { name: '管理ログイン' }).click();
     await page.waitForURL((url) => !url.pathname.endsWith('/login/'));
-    await context.storageState({ path: 'e2e/.auth/state.json' });
+    await context.storageState({ path: 'tests/e2e/.auth/state.json' });
   } finally {
     await browser.close();
   }

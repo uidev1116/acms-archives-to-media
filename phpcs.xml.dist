@@ -56,4 +56,6 @@
 
     <!-- Exclude dependencies -->
     <exclude-pattern>*/vendor/*</exclude-pattern>
+    <!-- ローカル専用の動作確認用シード（本番コードではない） -->
+    <exclude-pattern>*/tests/e2e/*</exclude-pattern>
 </ruleset>

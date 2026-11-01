@@ -59,7 +59,7 @@ export default tseslint.config(
   { files: ['frontend/**/*.tsx'], ...jsxA11y.flatConfigs.recommended },
   {
     // 設定ファイルと E2E は Node で動く
-    files: ['*.{js,ts}', 'e2e/**/*.ts'],
+    files: ['*.{js,ts}', 'tests/e2e/**/*.ts'],
     languageOptions: { globals: { ...globals.node } },
   },
   // 整形はプリティアに任せる（ルールの衝突を避けるため、最後に置く）

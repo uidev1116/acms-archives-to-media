@@ -6,7 +6,7 @@
  *   docker exec -w /var/www/plugins/ArchivesToMedia \
  *     -e ACMS_DB_HOST=db -e ACMS_DB_NAME=db_my-blog-site -e ACMS_DB_USER=root \
  *     -e ACMS_DB_PASS="$(docker exec my-blog-site-backend-db-1 printenv MYSQL_ROOT_PASSWORD)" \
- *     my-blog-site-backend-web-1 php e2e/seed-a2m-test.php
+ *     my-blog-site-backend-web-1 php tests/e2e/seed-a2m-test.php
  *
  * 安全のため、コードが a2m-test の子ブログ（親ブログではない）だけを対象にする。
  * 親ブログ（既存コンテンツ）には一切触れない。
@@ -123,6 +123,29 @@ for ($i = 1; $i <= 30; $i++) {
     image($dir . sprintf('many-%02d.jpg', $i), 320, 240, ($i * 37) % 200 + 30, ($i * 71) % 200 + 30, ($i * 113) % 200 + 30, 'many ' . $i);
 }
 
+// 管理画面のプレビュー（square / tiny）が壊れないよう、画像フィールドの画像には tiny- と square- の派生ファイルも作る
+// （コアが画像フィールドのアップロードで作るファイルと同じ名前。many-XX.jpg は画像ユニット専用なので作らない）
+foreach (glob($dir . '*.{jpg,png}', GLOB_BRACE) ?: [] as $file) {
+    $name = basename($file);
+    if (preg_match('/^(large|tiny|square)-|^many-/', $name) === 1) {
+        continue;
+    }
+    [$w, $h, $type] = getimagesize($file);
+    $src = $type === IMAGETYPE_PNG ? imagecreatefrompng($file) : imagecreatefromjpeg($file);
+    foreach (['tiny' => [200, (int) round(200 * $h / $w)], 'square' => [200, 200]] as $prefix => [$tw, $th]) {
+        $dst = imagecreatetruecolor($tw, $th);
+        if ($prefix === 'square') {
+            $side = min($w, $h);
+            imagecopyresampled($dst, $src, 0, 0, (int) (($w - $side) / 2), (int) (($h - $side) / 2), $tw, $th, $side, $side);
+        } else {
+            imagecopyresampled($dst, $src, 0, 0, 0, 0, $tw, $th, $w, $h);
+        }
+        $type === IMAGETYPE_PNG ? imagepng($dst, $dir . $prefix . '-' . $name) : imagejpeg($dst, $dir . $prefix . '-' . $name, 88);
+        imagedestroy($dst);
+    }
+    imagedestroy($src);
+}
+
 // ---------------------------------------------------------------- エントリー・ユニット・フィールド
 $now = date('Y-m-d H:i:s');
 
@@ -169,14 +192,51 @@ function fieldRows(int $blogId, int $entryId, int $sort, array $kv): void
 }
 
 /**
+ * 画像フィールドの値。コアのアップロード処理が作る形（@path / @x / @y / @fileSize と、
+ * large- / tiny- / square- の派生ファイルがあればその @…Path など）を、実ファイルから組み立てる。
+ *
  * @return array<string, string>
  */
 function imageField(string $fd, string $path, string $large, string $alt): array
 {
+    global $archivesRoot;
+    $info = static function (string $rel) use ($archivesRoot): ?array {
+        $file = $archivesRoot . $rel;
+        $size = is_file($file) ? getimagesize($file) : false;
+        return $size === false ? null : [(string) $size[0], (string) $size[1], (string) filesize($file)];
+    };
+    $variant = static fn (string $prefix): string => dirname($path) . '/' . $prefix . '-' . basename($path);
+    $row = ["{$fd}@path" => $path, "{$fd}@x" => '', "{$fd}@y" => '', "{$fd}@alt" => $alt, "{$fd}@fileSize" => ''];
+    if (($n = $info($path)) !== null) {
+        [$row["{$fd}@x"], $row["{$fd}@y"], $row["{$fd}@fileSize"]] = $n;
+    }
+    foreach (['large' => 'large', 'tiny' => 'tiny', 'square' => 'square'] as $prefix => $key) {
+        $row["{$fd}@{$key}Path"] = '';
+        $row["{$fd}@{$key}X"] = '';
+        $row["{$fd}@{$key}Y"] = '';
+        if (($v = $info($variant($prefix))) !== null) {
+            $row["{$fd}@{$key}Path"] = $variant($prefix);
+            [$row["{$fd}@{$key}X"], $row["{$fd}@{$key}Y"]] = $v;
+            $row["{$fd}@{$key}Alt"] = $alt;
+            $row["{$fd}@{$key}FileSize"] = $v[2];
+        }
+    }
+    $row["{$fd}@secret"] = md5($fd . '@' . $path);
+    return $row;
+}
+
+/**
+ * ファイルフィールドの値（@path / @baseName / @fileSize / @downloadName / @originalName / @secret）。
+ *
+ * @return array<string, string>
+ */
+function fileField(string $fd, string $path, string $downloadName): array
+{
+    global $archivesRoot;
+    $file = $archivesRoot . $path;
     return [
-        "{$fd}@path" => $path, "{$fd}@x" => '800', "{$fd}@y" => '600', "{$fd}@alt" => $alt, "{$fd}@fileSize" => '34567',
-        "{$fd}@largePath" => $large, "{$fd}@largeX" => $large === '' ? '' : '1600', "{$fd}@largeY" => $large === '' ? '' : '1200',
-        "{$fd}@tinyPath" => '', "{$fd}@squarePath" => '', "{$fd}@secret" => md5($fd . '@' . $path),
+        "{$fd}@path" => $path, "{$fd}@baseName" => basename($path), "{$fd}@fileSize" => is_file($file) ? (string) filesize($file) : '',
+        "{$fd}@downloadName" => $downloadName, "{$fd}@originalName" => basename($path), "{$fd}@secret" => md5($fd . '@' . $path),
     ];
 }
 
@@ -197,10 +257,8 @@ fieldRows($blogId, $e2, 1, ['caption' => 'グループ内のキャプション']
 fieldRows($blogId, $e2, 1, imageField('gallery', $p . 'gallery-1.jpg', '', 'ギャラリー 1'));
 fieldRows($blogId, $e2, 2, imageField('gallery', $p . 'gallery-2.jpg', $p . 'large-gallery-2.jpg', 'ギャラリー 2'));
 fieldRows($blogId, $e2, 1, imageField('legacy', $p . 'gone.jpg', '', '消えた画像'));
-fieldRows($blogId, $e2, 1, [
-    'attachment@path' => $p . 'estimate.pdf', 'attachment@baseName' => 'estimate.pdf', 'attachment@fileSize' => '350',
-    'attachment@downloadName' => '見積書.pdf', 'attachment@originalName' => 'estimate.pdf', 'attachment@secret' => md5('attachment@' . $p . 'estimate.pdf'),
-]);
+fieldRows($blogId, $e2, 1, fileField('attachment', $p . 'estimate.pdf', '見積書.pdf'));
+fieldRows($blogId, $e2, 1, ['@gallery_group' => 'gallery']);
 fieldRows($blogId, $e2, 1, ['@profile' => 'hero']);
 fieldRows($blogId, $e2, 2, ['@profile' => 'caption']);
 
@@ -241,13 +299,9 @@ foreach ([1 => 'rev-a.jpg', 2 => 'rev-b.jpg'] as $revId => $file) {
 // 6. カスタムユニット（画像フィールド・ファイルフィールドと、ユニット内のフィールドグループ）
 $e6 = entry($blogId, 'a2m-custom', 'カスタムユニットを持つエントリー');
 foreach ([1, 2] as $n) {
-    unit($blogId, $e6, $n, 'custom', ['1' => 'custom']);
+    unit($blogId, $e6, $n, 'custom_a2m_card');
     $uid = (string) q('SELECT column_id FROM ' . t('column') . ' WHERE column_entry_id = ? AND column_sort = ?', [$e6, $n], 'one');
-    $rows = imageField('photo', $p . "custom-{$n}.jpg", '', "カスタム画像 {$n}") + [
-        'doc@path' => $p . 'estimate.pdf', 'doc@baseName' => 'estimate.pdf', 'doc@fileSize' => '350',
-        'doc@downloadName' => '資料.pdf', 'doc@originalName' => 'estimate.pdf', 'doc@secret' => md5("doc{$n}"),
-        'title' => "カスタム {$n}",
-    ];
+    $rows = imageField('photo', $p . "custom-{$n}.jpg", '', "カスタム画像 {$n}") + fileField('doc', $p . 'estimate.pdf', "資料 {$n}.pdf") + ['title' => "カスタム {$n}"];
     foreach ($rows as $key => $value) {
         q('INSERT INTO ' . t('field') . ' (field_key, field_value, field_type, field_sort, field_search, field_eid, field_unit_id, field_blog_id) VALUES (?, ?, NULL, 1, \'off\', NULL, ?, ?)', [$key, $value, $uid, $blogId], 'exec');
     }
@@ -265,11 +319,7 @@ $ownerIds = [
     'mid' => \Acms\TestingFramework\Seeder\ModuleSeeder::seed($blogId, ['module_identifier' => 'a2m_seed_module', 'module_name' => 'Calendar_Month']),
 ];
 foreach ($ownerIds as $col => $ownerId) {
-    $rows = imageField('ownerphoto', $p . 'custom-1.jpg', '', "{$col} の画像") + [
-        'ownerdoc@path' => $p . 'estimate.pdf', 'ownerdoc@baseName' => 'estimate.pdf', 'ownerdoc@fileSize' => '350',
-        'ownerdoc@downloadName' => '資料.pdf', 'ownerdoc@originalName' => 'estimate.pdf', 'ownerdoc@secret' => md5("ownerdoc{$col}"),
-        'ownertitle' => "{$col} のタイトル",
-    ];
+    $rows = imageField('ownerphoto', $p . 'custom-1.jpg', '', "{$col} の画像") + fileField('ownerdoc', $p . 'estimate.pdf', '資料.pdf') + ['ownertitle' => "{$col} のタイトル"];
     foreach ($rows as $key => $value) {
         q('INSERT INTO ' . t('field') . ' (field_key, field_value, field_type, field_sort, field_search, field_eid, field_' . $col . ', field_blog_id) VALUES (?, ?, NULL, 1, \'off\', NULL, ?, ?)', [$key, $value, $ownerId, $blogId], 'exec');
     }
@@ -278,4 +328,5 @@ foreach ($ownerIds as $col => $ownerId) {
     }
 }
 
-fwrite(STDERR, "seeded blog {$blogId}: entries {$e1}, {$e2}, {$e3}, {$e4}, {$e5}, {$e6}\n");
+$moduleId = $ownerIds['mid'];
+fwrite(STDERR, "seeded blog {$blogId}: entries {$e1}, {$e2}, {$e3}, {$e4}, {$e5}, {$e6}; module {$moduleId}\n");

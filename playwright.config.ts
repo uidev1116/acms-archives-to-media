@@ -8,8 +8,8 @@ try {
 }
 
 export default defineConfig({
-  testDir: 'e2e',
-  globalSetup: './e2e/global-setup.ts',
+  testDir: 'tests/e2e',
+  globalSetup: './tests/e2e/global-setup.ts',
   fullyParallel: false,
   workers: 1,
   timeout: 120_000,
@@ -19,7 +19,7 @@ export default defineConfig({
     baseURL: process.env.A2M_BASE_URL ?? 'https://web.my-blog-site-backend.localhost/a2m-test/',
     ignoreHTTPSErrors: true,
     locale: 'ja-JP',
-    storageState: 'e2e/.auth/state.json',
+    storageState: 'tests/e2e/.auth/state.json',
     trace: 'retain-on-failure',
   },
   projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],

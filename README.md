@@ -197,7 +197,7 @@ npx playwright install chromium    # 初回のみ
 npm run e2e
 ```
 
-`.env.local`（コミットしない）に管理者の `A2M_ADMIN_MAIL` / `A2M_ADMIN_PASS` を書いておきます（`e2e/env.example` を参照）。そのユーザーは、子ブログにログインできる設定（ユーザーの「どのブログからでもログイン」）が必要です。実行前に `e2e/seed-a2m-test.php` で子ブログ `a2m-test` のデータを未変換の状態に作り直します（親ブログには触れません）。コンテナ名や URL を変える場合は `A2M_WEB_CONTAINER` / `A2M_DB_CONTAINER` / `A2M_DB_NAME` / `A2M_BASE_URL` を指定します。
+`.env.local`（コミットしない）に管理者の `A2M_ADMIN_MAIL` / `A2M_ADMIN_PASS` を書いておきます（`tests/e2e/env.example` を参照）。そのユーザーは、子ブログにログインできる設定（ユーザーの「どのブログからでもログイン」）が必要です。実行前に `tests/e2e/seed-a2m-test.php` で子ブログ `a2m-test` のデータを未変換の状態に作り直します（親ブログには触れません）。コンテナ名や URL を変える場合は `A2M_WEB_CONTAINER` / `A2M_DB_CONTAINER` / `A2M_DB_NAME` / `A2M_BASE_URL` を指定します。
 
 ### リリース
 
