@@ -205,27 +205,29 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
 
       <details className="acms-admin-a2m-details">
         <summary>詳細設定</summary>
-        <FieldKeyInput
-          id="a2m-include"
-          label="対象にするフィールド名（空なら全部）"
-          value={value.includeKeysText}
-          onChange={(v) => set('includeKeysText', v)}
-          candidates={detectedKeys}
-          hint="空なら全フィールドが対象です"
-        />
-        <FieldKeyInput
-          id="a2m-exclude"
-          label="除外するフィールド名"
-          value={value.excludeKeysText}
-          onChange={(v) => set('excludeKeysText', v)}
-          candidates={detectedKeys}
-          hint="ここに挙げた名前は変換しません。対象の指定より優先されます"
-        />
-        <Checkbox
-          label="フィールドグループの定義に追記する"
-          checked={value.appendToGroup}
-          onChange={(e) => set('appendToGroup', e.target.checked)}
-        />
+        <Fieldset legend="対象フィールドの絞り込み">
+          <FieldKeyInput
+            id="a2m-include"
+            label="対象にするフィールド名"
+            value={value.includeKeysText}
+            onChange={(v) => set('includeKeysText', v)}
+            candidates={detectedKeys}
+            hint="空なら全フィールドが対象です"
+          />
+          <FieldKeyInput
+            id="a2m-exclude"
+            label="除外するフィールド名"
+            value={value.excludeKeysText}
+            onChange={(v) => set('excludeKeysText', v)}
+            candidates={detectedKeys}
+            hint="ここに挙げた名前は変換しません。対象の指定より優先されます"
+          />
+          <Checkbox
+            label="フィールドグループの定義に追記する"
+            checked={value.appendToGroup}
+            onChange={(e) => set('appendToGroup', e.target.checked)}
+          />
+        </Fieldset>
 
         <Fieldset legend="オプション">
           <div className="acms-admin-a2m-checks acms-admin-a2m-checks--column">

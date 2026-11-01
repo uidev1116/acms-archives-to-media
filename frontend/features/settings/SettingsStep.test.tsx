@@ -208,10 +208,7 @@ describe('SettingsStep', () => {
     await userEvent.type(tags, 'b{Enter}');
     await userEvent.click(screen.getByLabelText('ゴミ箱のエントリー'));
     await userEvent.click(screen.getByLabelText('カテゴリー'));
-    await userEvent.type(
-      screen.getByLabelText('対象にするフィールド名（空なら全部）'),
-      'hero{Enter}',
-    );
+    await userEvent.type(screen.getByLabelText('対象にするフィールド名'), 'hero{Enter}');
     await userEvent.type(screen.getByLabelText('除外するフィールド名'), 'og{Enter}');
 
     await clickScan();
