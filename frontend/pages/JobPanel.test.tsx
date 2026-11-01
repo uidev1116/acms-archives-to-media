@@ -327,11 +327,7 @@ describe('JobPanel', () => {
       within(dialog).getByLabelText('ロールバックできなくなることを理解しました'),
     );
     expect(within(dialog).getByRole('button', { name: '確定する' })).toBeDisabled();
-    await userEvent.click(
-      within(dialog).getByLabelText(
-        '旧データを残したまま確定し、あとからクリーンアップできなくなることを理解しました',
-      ),
-    );
+    await userEvent.click(within(dialog).getByLabelText('旧データを残したまま確定します'));
     await userEvent.click(within(dialog).getByRole('button', { name: '確定する' }));
     await screen.findByText('確定済み');
     expect(client.calls.find((c) => c.action === 'finalize')?.params).toEqual({

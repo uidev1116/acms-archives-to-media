@@ -1,4 +1,4 @@
-import { Input } from '@ablogcms/components/input';
+import { CreatableSelect } from '@ablogcms/components/rich-select';
 import { parseList } from './options';
 
 interface Props {
@@ -10,42 +10,30 @@ interface Props {
   hint: string;
 }
 
-/** 複数指定できるフィールド名の入力。検出済みの名前はチップで追加・解除でき、直接入力（カンマ・空白区切り）もできる */
+interface Option {
+  value: string;
+  label: string;
+}
+
+const toOption = (key: string): Option => ({ value: key, label: key });
+
+/** 複数指定できるフィールド名の入力。検出済みの名前から選ぶか、直接入力して Enter・カンマで追加する */
 export default function FieldKeyInput({ id, label, value, onChange, candidates, hint }: Props) {
-  const selected = parseList(value);
-  const toggle = (key: string) => {
-    onChange(
-      (selected.includes(key) ? selected.filter((k) => k !== key) : [...selected, key]).join(', '),
-    );
-  };
   return (
     <div className="acms-admin-a2m-block">
       <label htmlFor={id}>{label}</label>
-      <Input
-        id={id}
+      <CreatableSelect<Option, true>
+        inputId={id}
         aria-label={label}
-        value={value}
-        placeholder="複数ならカンマか空白で区切る（例: cover, gallery）"
-        onChange={(e) => onChange(e.target.value)}
+        isMulti
+        value={parseList(value).map(toOption)}
+        options={candidates.map(toOption)}
+        placeholder="選ぶか、入力して Enter（複数可）"
+        noOptionsMessage={() => '候補がありません'}
+        formatCreateLabel={(input) => `「${input}」を追加`}
+        onChange={(next) => onChange(next.map((o) => o.value).join(', '))}
       />
-      {candidates.length > 0 && (
-        <div className="acms-admin-a2m-chips" role="group" aria-label={`${label}の候補`}>
-          {candidates.map((key) => (
-            <button
-              key={key}
-              type="button"
-              className="acms-admin-a2m-chip"
-              aria-pressed={selected.includes(key)}
-              onClick={() => toggle(key)}
-            >
-              {key}
-            </button>
-          ))}
-        </div>
-      )}
-      <p className="acms-admin-a2m-muted">
-        {hint}（{selected.length} 件指定中）
-      </p>
+      <p className="acms-admin-a2m-muted">{hint}</p>
     </div>
   );
 }

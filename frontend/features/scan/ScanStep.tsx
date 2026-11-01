@@ -77,7 +77,7 @@ export function ScanStep({ jobId, onBack, onProceed }: Props) {
         <>
           <p>スキャンが完了しました。{detail.job.total} 件の候補が見つかりました。</p>
           <Alert variant="info" role="note">
-            スキャンでは何も書き換えません。新規登録・再利用の見込みは、内容のハッシュで判定しています（時間がかかるときは、一部を実行時の判定に回します）。
+            スキャンでは何も書き換えません。新規登録・再利用の見込みは、内容のハッシュで判定しています。
           </Alert>
           <ScanSummary summary={detail.summary} />
           <ItemTable

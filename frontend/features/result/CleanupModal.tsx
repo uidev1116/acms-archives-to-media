@@ -27,11 +27,9 @@ export function CleanupModal({ isOpen, count, onClose, onConfirm }: Props) {
       <ModalBody>
         <p>
           {count} 件のフィールドの旧キー（<code>{'{fd}@path'}</code>{' '}
-          など）を削除します。新しいフィールド（メディア）が無いものは、データを失わないよう削除しません。
+          など）を削除します。メディアに変換されていないものは削除しません。
         </p>
-        <p>
-          削除後は、旧テンプレートでは表示できなくなります。ロールバックすれば、旧キーも含めて元に戻せます。
-        </p>
+        <p>削除後は旧テンプレートで表示できなくなります。ロールバックで元に戻せます。</p>
         <Checkbox
           label="テンプレートの移行は完了しています"
           checked={migrated}

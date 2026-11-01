@@ -127,7 +127,7 @@ describe('SettingsStep', () => {
   it('カスタムモードでは対応表の入力欄が出る', async () => {
     const onSubmit = vi.fn();
     render(<Harness onSubmit={onSubmit} />);
-    await userEvent.click(screen.getByLabelText(/^カスタム（フィールド/));
+    await userEvent.click(screen.getByLabelText(/^カスタム（書き込み先/));
     await userEvent.type(screen.getByLabelText('フィールド名の対応（元=先）'), 'hero=visual');
     await userEvent.click(screen.getByRole('button', { name: 'スキャンして確認へ' }));
     const o = onSubmit.mock.calls[0]?.[0] as JobOptions;
@@ -170,19 +170,16 @@ describe('SettingsStep', () => {
     expect((onSubmit.mock.calls[0]?.[0] as JobOptions).field.removeLegacyKeys).toBe(false);
   });
 
-  it('検出済みのフィールド名を押すと、除外するフィールド名へ複数追加・解除できる', async () => {
+  it('除外するフィールド名を複数選べる', async () => {
     const onSubmit = vi.fn();
     render(<Harness onSubmit={onSubmit} />);
-    const group = screen.getByRole('group', { name: '除外するフィールド名の候補' });
-    await userEvent.click(within(group).getByRole('button', { name: 'hero' }));
-    await userEvent.click(within(group).getByRole('button', { name: 'doc' }));
-    expect(screen.getByLabelText('除外するフィールド名')).toHaveValue('hero, doc');
-    expect(within(group).getByRole('button', { name: 'hero' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-    await userEvent.click(within(group).getByRole('button', { name: 'hero' }));
-    expect(screen.getByLabelText('除外するフィールド名')).toHaveValue('doc');
+    const box = screen.getByLabelText('除外するフィールド名');
+    await userEvent.click(box);
+    await userEvent.click(await screen.findByRole('option', { name: 'hero' }));
+    await userEvent.click(box);
+    await userEvent.type(box, 'og{Enter}');
+    await clickScan();
+    expect((onSubmit.mock.calls[0]?.[0] as JobOptions).field.excludeKeys).toEqual(['hero', 'og']);
   });
 
   it('入力に問題があるとエラーを表示して送信しない', async () => {
@@ -207,8 +204,11 @@ describe('SettingsStep', () => {
     await userEvent.type(tags, 'a, b');
     await userEvent.click(screen.getByLabelText('ゴミ箱のエントリー'));
     await userEvent.click(screen.getByLabelText('カテゴリー'));
-    await userEvent.type(screen.getByLabelText('対象にするフィールド名（空なら全部）'), 'hero');
-    await userEvent.type(screen.getByLabelText('除外するフィールド名'), 'og');
+    await userEvent.type(
+      screen.getByLabelText('対象にするフィールド名（空なら全部）'),
+      'hero{Enter}',
+    );
+    await userEvent.type(screen.getByLabelText('除外するフィールド名'), 'og{Enter}');
 
     await clickScan();
     const o = onSubmit.mock.calls[0]?.[0] as JobOptions;

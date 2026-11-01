@@ -40,14 +40,13 @@ const ENTRY_STATUS_LABEL: Record<EntryStatus, string> = {
 const FIELD_MODES: { value: FieldMode; label: string }[] = [
   {
     value: 'same',
-    label:
-      '同名のフィールドに書き込む（既定。メンテナンス中の実行向け・テンプレートの同時差し替えが必要）',
+    label: '同名のフィールドに書き込む（既定。テンプレートの同時差し替えが必要）',
   },
   {
     value: 'suffix',
-    label: '別名のフィールドに書き込む（旧データはそのまま残る。段階的に移行する場合）',
+    label: '別名のフィールドに書き込む（旧データを残して段階的に移行）',
   },
-  { value: 'custom', label: 'カスタム（フィールドごとに書き込み先を指定）' },
+  { value: 'custom', label: 'カスタム（書き込み先を個別に指定）' },
 ];
 
 function toggle<T>(list: T[], item: T, order: T[]): T[] {
@@ -90,8 +89,8 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
 
       {value.fieldMode === 'suffix' && (
         <Alert variant="warning" className="acms-admin-a2m-note" role="note">
-          テンプレートを直す前に管理画面でエントリーを再保存すると、書き込んだメディアの値（別名のフィールド）は消えます。
-          旧データは残るので表示は壊れません。消えた分は、テンプレート更新後にもう一度実行すると揃います。
+          テンプレートを直す前にエントリーを再保存すると、書き込んだメディアの値は消えます。
+          旧データは残るので表示は壊れません。テンプレート更新後に再実行すると揃います。
         </Alert>
       )}
 
@@ -185,12 +184,9 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
         )}
         {value.fieldMode === 'same' && (
           <Alert variant="warning" className="acms-admin-a2m-note" role="note">
-            同名モードでは、メディアフィールドが表示時に <code>{'{fd}@path'}</code>{' '}
-            などをメディアの値で上書きします。<code>@path</code> はメディアの URL になるので、
-            <code>{'%{ARCHIVES_DIR}{fd@path}'}</code>{' '}
-            のように前に付けているテンプレートや、旧キーのうち上書きされないもの（
-            <code>@largePath</code> など）を使うテンプレートは、同時に差し替えるまで表示が壊れます。
-            管理画面の入力欄も、メディア用の書き方に直すまで空に見えます。その状態でエントリーを保存すると、メディアの値は消えます。
+            <code>@path</code> などはメディアの値で上書きされます。<code>@path</code> は URL
+            になるため、<code>{'%{ARCHIVES_DIR}{fd@path}'}</code> や <code>@largePath</code>{' '}
+            などを使うテンプレートは、同時に差し替えるまで表示が壊れます。入力欄もメディア用に直すまで空に見え、その状態で保存するとメディアの値は消えます。
           </Alert>
         )}
         {value.fieldMode === 'same' && (
@@ -206,7 +202,7 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
           value={value.includeKeysText}
           onChange={(v) => set('includeKeysText', v)}
           candidates={detectedKeys}
-          hint="下の検出済みの名前を押すと追加・解除できます。空なら全フィールドが対象です"
+          hint="空なら全フィールドが対象です"
         />
         <FieldKeyInput
           id="a2m-exclude"
@@ -311,11 +307,10 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
         <ModalHeader>同名モードで実行します</ModalHeader>
         <ModalBody>
           <p>
-            同名モードでは、旧キー（<code>{'{fd}@path'}</code>{' '}
-            など）を削除し、同じ名前のメディアフィールドに置き換えます。
-            テンプレートを同時に差し替えないと、表示が壊れることがあります（<code>@path</code>{' '}
-            はメディアの URL になり、旧キーの <code>@largePath</code>{' '}
-            などは削除されます）。管理画面の入力欄も、メディア用に直すまで空に見えます。ロールバックで元に戻せますが、ステージングでの確認を強くおすすめします。
+            旧キー（<code>{'{fd}@path'}</code>{' '}
+            など）を削除し、同名のメディアフィールドに置き換えます。
+            テンプレートと入力欄を同時に差し替えないと、表示が壊れたり入力欄が空に見えたりします。
+            ロールバックはできますが、先にステージングで試してください。
           </p>
         </ModalBody>
         <ModalFooter>

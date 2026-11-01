@@ -25,29 +25,6 @@
   font-size: 0.875em;
 }
 
-.acms-admin-a2m-root .acms-admin-a2m-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-block: 0.5rem;
-}
-
-.acms-admin-a2m-root .acms-admin-a2m-chip {
-  padding: 0.15rem 0.7rem;
-  border: 1px solid var(--a2m-muted);
-  border-radius: 999px;
-  background: transparent;
-  color: inherit;
-  font-size: 0.875em;
-  cursor: pointer;
-}
-
-.acms-admin-a2m-root .acms-admin-a2m-chip[aria-pressed='true'] {
-  border-color: #2563eb;
-  background: #2563eb;
-  color: #fff;
-}
-
 .acms-admin-a2m-root .acms-admin-a2m-step {
   margin-block: var(--a2m-gap);
 }

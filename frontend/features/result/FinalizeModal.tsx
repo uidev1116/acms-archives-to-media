@@ -31,14 +31,11 @@ export function FinalizeModal({ isOpen, count, legacyCount = 0, onClose, onConfi
     <Modal isOpen={isOpen} onClose={close} size="small">
       <ModalHeader>変換の確定</ModalHeader>
       <ModalBody>
-        <p>
-          {count}{' '}
-          件の変換を確定します。ロールバック用の記録（変換前後のスナップショット）を削除して、データベースの容量を回収します。
-        </p>
+        <p>{count} 件の変換を確定し、ロールバック用の記録を削除します。</p>
         <p>
           確定すると<strong>ロールバックできなくなります</strong>
-          （スキップ・エラー分の再実行も、旧データのクリーンアップもできなくなります）。変換結果の件数と
-          CSV、作成したメディアは残ります。表示の確認とテンプレートの移行が終わってから行ってください。
+          （スキップ・エラー分の再実行と旧データのクリーンアップも同様です）。作成したメディアは残ります。
+          表示の確認とテンプレートの移行が済んでから行ってください。
         </p>
         <Checkbox
           label="ロールバックできなくなることを理解しました"
@@ -49,10 +46,10 @@ export function FinalizeModal({ isOpen, count, legacyCount = 0, onClose, onConfi
           <>
             <Alert variant="warning" role="note">
               旧データのクリーンアップが済んでいないフィールドが {legacyCount}{' '}
-              件あります。確定すると、あとからクリーンアップできなくなります。先にクリーンアップすることをおすすめします。
+              件あります。確定するとクリーンアップできなくなるので、先に済ませてください。
             </Alert>
             <Checkbox
-              label="旧データを残したまま確定し、あとからクリーンアップできなくなることを理解しました"
+              label="旧データを残したまま確定します"
               checked={keepLegacy}
               onChange={(e) => setKeepLegacy(e.target.checked)}
             />
