@@ -19,10 +19,17 @@ describe('TemplateHints', () => {
     render(<TemplateHints fieldKeys={{ image: ['hero'], file: ['doc'] }} field={field} />);
     expect(screen.getByText('hero')).toBeInTheDocument();
     expect(
-      screen.getByText(/<img src="\{hero_media@path\}" alt="\{hero_media@alt\}">/),
+      screen.getByText(
+        /<img src="%\{MEDIA_ARCHIVES_DIR\}\{hero_media@path\}" alt="\{hero_media@alt\}">/,
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText(/<a href="\{doc_media@path\}">/)).toBeInTheDocument();
     expect(screen.getByText(/name="hero_media:extension" value="media"/)).toBeInTheDocument();
+  });
+
+  it('画像には、標準テンプレートでは MEDIA_ARCHIVES_DIR を前に付ける旨を添える', () => {
+    render(<TemplateHints fieldKeys={{ image: ['hero'], file: ['doc'] }} field={field} />);
+    expect(screen.getAllByText(/を前に付けます/)).toHaveLength(1);
   });
 
   it('同名モードでは変数名は変わらない旨を表示する', () => {

@@ -30,7 +30,7 @@ function snippets(
   if (kind === 'image') {
     return {
       old: `<img src="%{ARCHIVES_DIR}{${fd}@path}" alt="{${fd}@alt}">`,
-      next: `<img src="{${dest}@path}" alt="{${dest}@alt}">`,
+      next: `<img src="%{MEDIA_ARCHIVES_DIR}{${dest}@path}" alt="{${dest}@alt}">`,
       input: mediaInput(dest, kind),
     };
   }
@@ -75,6 +75,13 @@ export function TemplateHints({ fieldKeys, field }: Props) {
             <h4>
               <code>{fd}</code>
             </h4>
+            {kind === 'image' && (
+              <p className="acms-admin-a2m-muted">
+                標準テンプレートの <code>@path</code> は <code>/media/</code> を含まないので、
+                <code>%{'{MEDIA_ARCHIVES_DIR}'}</code> を前に付けます。Twig（V2
+                モジュール）ではすでに <code>/media/</code> 付きの URL なので、そのまま使います。
+              </p>
+            )}
             <pre className="acms-admin-a2m-code">{`<!-- 旧 -->  ${s.old}\n<!-- 新 -->  ${s.next}\n<!-- 入力欄 -->\n${s.input}`}</pre>
             <Button
               size="small"

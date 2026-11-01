@@ -66,12 +66,12 @@ a-blog cms では、画像ユニット・ファイルユニット・画像フィ
 
 `{fd}@path` / `@alt` / `@fileSize` / `@extension` / `@thumbnail` / `@width` / `@height` …
 
-上書き後の `@path` は `Url::resolveUrl($path, MEDIA_LIBRARY_DIR)` で解決済みの URL です。
+上書き後の `@path`（画像）は `Url::resolveUrl($path, MEDIA_LIBRARY_DIR)` の結果です。V2 モジュール（Twig）では `/media/…` の URL になりますが、標準テンプレートでは `/media/` が付かない相対パス（`004/202611/a.jpg`）なので、`%{MEDIA_ARCHIVES_DIR}` を前に付けて使います（実機で確認済み）。ファイルの `@path` は、どちらでもダウンロード URL（`/…/media-download/…`）そのものです。
 
 **同じフィールド名のままメディア化すると、テンプレートによっては、直す前に表示が壊れます。** 上書きされるのは上のキーだけで、`@path` はメディアの URL になります。
 
-- `{main_image@path}` をそのまま出しているテンプレートは、メディアの画像が出ます（実機で確認したのは、この書き方と `@alt` だけです）。
-- `%{ARCHIVES_DIR}{main_image@path}` のように `archives/` を前に付けているテンプレートは、`archives//media/…` のような壊れた URL になります。
+- Twig（V2 モジュール）で `@path` をそのまま出しているテンプレートは、メディアの画像が出ます。前に `archives/` を付けていると `archives//media/…` のような壊れた URL になります。
+- 標準テンプレートで `%{ARCHIVES_DIR}{main_image@path}` のように書いているテンプレートは、`/archives/004/…` を指して画像が出ません。`{main_image@path}` だけでも、`/media/` が付かない相対パスになって出ません。`%{MEDIA_ARCHIVES_DIR}{main_image@path}` に直す必要があります。
 - `@largePath` / `@squarePath` / `@baseName` / `@downloadName` など、上書きされないキーは、旧キーを削除する設定だと空になります（残す設定だと、旧形式とメディア形式が混ざります）。
 - 管理画面の入力欄は、メディア用の書き方に直すまで空に見えます。その状態でエントリーを保存すると、メディアの値（`{fd}` と `{fd}@media`）は消え、空の `@path` などに置き換わります（実機で確認済み）。
 
@@ -251,7 +251,7 @@ UI モック（4 パターン）はローカル用の HTML（`docs/ui-mock.html`
 
 ```
 <!-- 旧 -->  <img src="%{ARCHIVES_DIR}{main_image@path}" alt="{main_image@alt}">
-<!-- 新 -->  <img src="{main_image_media@path}" alt="{main_image_media@alt}">
+<!-- 新 -->  <img src="%{MEDIA_ARCHIVES_DIR}{main_image_media@path}" alt="{main_image_media@alt}">
 <!-- 入力欄 --> <input type="hidden" name="main_image_media" value="{main_image_media}">
            <input type="hidden" name="main_image_media:extension" value="media">  … メディア選択 UI は公式スニペット参照
 ```

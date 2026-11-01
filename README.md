@@ -118,11 +118,13 @@ a-blog cms の `archives/` 配下の画像・ファイルを参照している�
 
 ```html
 <!-- 旧 -->
-<img src="%{ARCHIVES_DIR}{hero@path}" alt="{hero@alt}">
+<img src="%{ARCHIVES_DIR}{hero@path}" alt="{hero@alt}" />
 
 <!-- 新 -->
-<img src="{hero_media@path}" alt="{hero_media@alt}">
+<img src="%{MEDIA_ARCHIVES_DIR}{hero_media@path}" alt="{hero_media@alt}" />
 ```
+
+標準テンプレートの画像の `@path` は `/media/` を含まない相対パスなので、`%{MEDIA_ARCHIVES_DIR}` を前に付けます（ファイルの `@path` はダウンロード URL そのものなので付けません）。Twig（V2 モジュール）では `@path` が `/media/` 付きの URL になるため、付けずにそのまま使います。
 
 入力欄は、メディアフィールドの書き方（`js-media-field`）に置き換えます。ヒントの「コピー」ボタンで、表示側と入力欄をまとめてコピーできます。ヒントは固定の書き換え例を表示するだけで、テンプレートの中身は読んでいません。
 
@@ -141,21 +143,26 @@ define('ARCHIVES_TO_MEDIA_FORCE_UNINSTALL', true);
 ### よくある問題
 
 **Q: 画面が表示されない**
+
 - 拡張アプリがそのブログで有効化されているか確認してください
 - 管理画面の URL は `admin/app_archives_to_media_index/`（`app_` 付き）です
 
 **Q: 画面や操作で 500 エラーになる**
+
 - プラグインを更新したあと、「アップデート」を実行していない可能性があります（新しい列が無い状態です）
 - 詳細は管理画面の「監査ログ」で確認できます
 
 **Q: `ENTRY_LOCKED` でスキップされる**
+
 - そのエントリーが編集ロック中です。ロックが外れてから「スキップ・エラー分を再実行」してください
 - 編集ロック機能が使えないサイトでは、実行中にエントリーを保存しないでください
 
 **Q: `SOURCE_NOT_FOUND` / `SOURCE_FORBIDDEN` / `SOURCE_TOO_LARGE` / `SOURCE_INVALID_MIME` でスキップされる**
+
 - 元ファイルが無い、archives の外を指している、サイズ上限を超えている、許可されない形式のいずれかです。ファイルやパスを直してから再実行してください
 
 **Q: 大量データでの処理が遅い**
+
 - 1 回に処理する件数（チャンク）は、既定 20 件＋時間の上限です。進捗は DB に残るので、途中で止まっても再開できます
 - 数十万件規模では、ロールバック用のスナップショットでテーブルが大きくなります。結果を確認し終えたら「変換を確定する」で回収できます
 

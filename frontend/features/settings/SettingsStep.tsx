@@ -189,8 +189,8 @@ export function SettingsStep({ definitions, value, onChange, onSubmit, busy = fa
         )}
         {value.fieldMode === 'same' && (
           <Alert variant="warning" className="acms-admin-a2m-note" role="note">
-            <code>@path</code> などはメディアの値で上書きされます。<code>@path</code> は URL
-            になるため、<code>{'%{ARCHIVES_DIR}{fd@path}'}</code> や <code>@largePath</code>{' '}
+            <code>@path</code> などはメディアの値で上書きされます。
+            <code>{'%{ARCHIVES_DIR}{fd@path}'}</code> や <code>@largePath</code>{' '}
             などを使うテンプレートは、同時に差し替えるまで表示が壊れます。入力欄もメディア用に直すまで空に見え、その状態で保存するとメディアの値は消えます。
           </Alert>
         )}
