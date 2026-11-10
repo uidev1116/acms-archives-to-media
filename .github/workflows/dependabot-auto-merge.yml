@@ -2,11 +2,12 @@ name: Dependabot auto-merge
 
 # Auto-merge Dependabot PRs once the required checks pass:
 #   - GitHub Actions (every action is pinned to a commit SHA): patch and minor updates
-#   - Composer (dev tools only; the plugin has no runtime Composer dependencies): the composer-production and
-#     composer-development groups (see .github/dependabot.yml)
-# npm PRs are also opened by Dependabot but are NOT auto-merged: the admin UI bundles React and
-# @ablogcms/components and runs with administrator privileges, so those updates are reviewed by hand
-# (CI runs `npm audit` on every push).
+#   - Composer and npm: the *-production (minor / patch), *-development (major / minor / patch) and *-other
+#     (minor / patch) groups (see .github/dependabot.yml). A major update of a production dependency opens its own
+#     PR and is reviewed by hand.
+# Note: the admin UI bundles React and @ablogcms/components and runs with administrator privileges, so a bad npm
+# release would run with those privileges. That risk is accepted in exchange for automation; CI runs `npm audit`
+# on every push.
 #
 # Requires (in repo Settings): "Allow auto-merge" enabled, and a branch protection rule on the
 # default branch with the Test workflow as a required status check — otherwise --auto has no check
@@ -28,13 +29,17 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Enable auto-merge (GitHub Actions and Composer)
+      - name: Enable auto-merge
         if: >-
           (steps.metadata.outputs.package-ecosystem == 'github_actions' &&
           (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
           steps.metadata.outputs.update-type == 'version-update:semver-minor')) ||
+          steps.metadata.outputs.dependency-group == 'npm-production' ||
+          steps.metadata.outputs.dependency-group == 'npm-development' ||
+          steps.metadata.outputs.dependency-group == 'npm-other' ||
           steps.metadata.outputs.dependency-group == 'composer-production' ||
-          steps.metadata.outputs.dependency-group == 'composer-development'
+          steps.metadata.outputs.dependency-group == 'composer-development' ||
+          steps.metadata.outputs.dependency-group == 'composer-other'
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
