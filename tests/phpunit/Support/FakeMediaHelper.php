@@ -25,7 +25,7 @@ final class FakeMediaHelper extends Helper
     /** previewRegisterLocalFile（ファイル全体のハッシュ計算を伴う）を呼んだ回数 */
     public int $previewCalls = 0;
 
-    public function previewRegisterLocalFile(string $filepath, string $filename): MediaImportPreview
+    public function previewRegisterLocalFile(string $filepath, string $filename, $blogId = BID): MediaImportPreview
     {
         $this->previewCalls++;
         $hash = hash_file('sha256', $filepath);
@@ -36,12 +36,12 @@ final class FakeMediaHelper extends Helper
         return is_numeric($existing) && (int) $existing > 0 ? MediaImportPreview::reuse((int) $existing, $filename) : MediaImportPreview::create($filename);
     }
 
-    public function registerLocalFile(string $filepath, string $filename): int
+    public function registerLocalFile(string $filepath, string $filename, $blogId = BID): int
     {
         if ($this->failRegister) {
             throw new \RuntimeException('この画像形式は登録できません。');
         }
-        $preview = $this->previewRegisterLocalFile($filepath, $filename);
+        $preview = $this->previewRegisterLocalFile($filepath, $filename, $blogId);
         if ($preview->isDuplicate() && $preview->reusedMediaId() !== null) {
             return $preview->reusedMediaId();
         }
@@ -57,7 +57,7 @@ final class FakeMediaHelper extends Helper
                 VALUES (?, ?, ?, ?, ?, \'\', \'\', ?, \'\', ?, NOW(), NOW(), \'\', \'\', \'\', \'\', \'\', \'\', ?, ?, ?)',
             'params' => [
                 $mid, $isImage ? '' : 'entry', $isImage ? 'image' : 'file', $ext, 'fake/' . $mid . '-' . $filename,
-                $filename, (string) filesize($filepath), 1, \BID, $hash,
+                $filename, (string) filesize($filepath), 1, Cast::int($blogId), $hash,
             ],
         ], 'exec');
         $this->registered[] = $filename;
