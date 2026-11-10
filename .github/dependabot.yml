@@ -35,13 +35,19 @@ updates:
         update-types: ['version-update:semver-major', 'version-update:semver-minor']
       - dependency-name: '@types/node'
         update-types: ['version-update:semver-major']
+    # Indirect dependencies are updated too (Dependabot tracks direct ones only by default).
+    allow:
+      - dependency-type: 'all'
     groups:
-      npm-minor-patch:
-        patterns:
-          - '*'
+      # Production dependencies: minor and patch updates only (a major update opens its own PR).
+      npm-production:
+        dependency-type: 'production'
         update-types:
           - 'minor'
           - 'patch'
+      # Development dependencies: major, minor and patch updates are all grouped.
+      npm-development:
+        dependency-type: 'development'
 
   - package-ecosystem: 'composer'
     directory: '/'
@@ -49,10 +55,16 @@ updates:
       interval: 'weekly'
     ignore:
       - dependency-name: 'ablogcms/testing-framework'
+    # Indirect dependencies are updated too (Dependabot tracks direct ones only by default).
+    allow:
+      - dependency-type: 'all'
     groups:
-      composer-minor-patch:
-        patterns:
-          - '*'
+      # Production dependencies: minor and patch updates only (a major update opens its own PR).
+      composer-production:
+        dependency-type: 'production'
         update-types:
           - 'minor'
           - 'patch'
+      # Development dependencies: major, minor and patch updates are all grouped.
+      composer-development:
+        dependency-type: 'development'
