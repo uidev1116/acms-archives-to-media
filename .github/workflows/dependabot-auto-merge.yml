@@ -5,6 +5,7 @@ name: Dependabot auto-merge
 #   - Composer and npm: the *-production (minor / patch), *-development (major / minor / patch) and *-other
 #     (minor / patch) groups (see .github/dependabot.yml). A major update of a production dependency opens its own
 #     PR and is reviewed by hand.
+#   - indirect dependencies updated on their own (not in a group): minor and patch updates
 # Note: the admin UI bundles React and @ablogcms/components and runs with administrator privileges, so a bad npm
 # release would run with those privileges. That risk is accepted in exchange for automation; CI runs `npm audit`
 # on every push.
@@ -31,6 +32,9 @@ jobs:
 
       - name: Enable auto-merge
         if: >-
+          (steps.metadata.outputs.dependency-type == 'indirect' &&
+          (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor')) ||
           (steps.metadata.outputs.package-ecosystem == 'github_actions' &&
           (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
           steps.metadata.outputs.update-type == 'version-update:semver-minor')) ||
