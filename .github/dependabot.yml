@@ -29,6 +29,9 @@ updates:
     schedule:
       interval: 'weekly'
     ignore:
+      # @ablogcms/* must match the a-blog cms core the plugin runs on, so bump it by hand with the core
+      # (the CI matrix pins the core per minor version).
+      - dependency-name: '@ablogcms/*'
       - dependency-name: 'eslint'
         update-types: ['version-update:semver-major']
       - dependency-name: '@eslint/js'
