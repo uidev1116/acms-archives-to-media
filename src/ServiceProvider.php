@@ -62,7 +62,7 @@ use Acms\Services\Unit\UnitLock;
 class ServiceProvider extends ACMS_App
 {
     /** @var string */
-    public $version = '0.1.0';
+    public $version = '1.0.0';
 
     /** @var string */
     public $name = 'ArchivesToMedia';
