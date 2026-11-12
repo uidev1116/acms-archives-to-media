@@ -33,7 +33,8 @@ final class ServiceProviderTest extends A2mTestCase
     public function 識別子はスケルトンの規約どおり(): void
     {
         $p = new ServiceProvider();
-        $this->assertSame('0.1.0', $p->version);
+        // 値はリリースのたびに scripts/version.php で変わるので固定値では比べない（形式だけを保証する）
+        $this->assertMatchesRegularExpression('/\A\d+\.\d+\.\d+\z/', $p->version);
         $this->assertSame('ArchivesToMedia', $p->name);
         $this->assertSame('uidev1116', $p->author);
         $this->assertSame('archives_to_media_index', $p->menu);

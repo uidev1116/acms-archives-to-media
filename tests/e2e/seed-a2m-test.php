@@ -40,7 +40,13 @@ const UNIT_DELIM = ':acms_unit_delimiter:';
  */
 function q(string $sql, array $params = [], string $mode = 'all')
 {
-    return Database::query(['sql' => $sql, 'params' => $params], $mode);
+    $result = Database::query(['sql' => $sql, 'params' => $params], $mode);
+    // 書き込みの失敗（主キーの重複・存在しない列など）は false が返るだけで例外にならない。
+    // 黙って続けると「データが一部しか無い」状態になり原因が分かりにくいので、ここで止める
+    if ($mode === 'exec' && $result === false) {
+        throw new RuntimeException('クエリが失敗しました: ' . $sql);
+    }
+    return $result;
 }
 
 function t(string $table): string
@@ -164,10 +170,12 @@ function entry(int $blogId, string $code, string $title, array $extra = []): int
 /**
  * @param array<string, string> $f
  */
-function unit(int $blogId, int $entryId, int $sort, string $type, array $f = [], string $size = ''): void
+function unit(int $blogId, int $entryId, int $sort, string $type, array $f = [], string $size = ''): string
 {
+    // Ver.3.2 のユニット ID は UUID（コアと同じ uuidv4()）。sequence_column_id は無いので nextval() は使わない
+    $id = uuidv4();
     $row = [
-        'column_id' => (string) nextval('sequence_column_id'), 'column_status' => 'open', 'column_sort' => $sort,
+        'column_id' => $id, 'column_status' => 'open', 'column_sort' => $sort,
         'column_align' => 'auto', 'column_type' => $type, 'column_parent_id' => null, 'column_anker' => '', 'column_attr' => '',
         'column_group' => '', 'column_size' => $size, 'column_field_1' => '', 'column_field_2' => '', 'column_field_3' => '',
         'column_field_4' => '', 'column_field_5' => '', 'column_field_6' => '', 'column_field_7' => '', 'column_field_8' => '',
@@ -177,6 +185,7 @@ function unit(int $blogId, int $entryId, int $sort, string $type, array $f = [],
         $row['column_field_' . $k] = $v;
     }
     q('INSERT INTO ' . t('column') . ' (' . implode(',', array_keys($row)) . ') VALUES (' . implode(',', array_fill(0, count($row), '?')) . ')', array_values($row), 'exec');
+    return $id;
 }
 
 /**
@@ -311,7 +320,8 @@ fieldRows($blogId, $e5, 1, imageField('cover', $p . 'rev-b.jpg', '', 'カバー'
 foreach ([1 => 'rev-a.jpg', 2 => 'rev-b.jpg'] as $revId => $file) {
     $entryRow = q('SELECT * FROM ' . t('entry') . ' WHERE entry_id = ?', [$e5], 'row');
     $entryRow += ['entry_approval_public_point' => 0, 'entry_approval_reject_point' => 0, 'entry_rev_id' => $revId, 'entry_rev_status' => 'none', 'entry_rev_user_id' => 1, 'entry_rev_datetime' => $now, 'entry_rev_memo' => 'seed rev ' . $revId];
-    $revColumns = array_map(static fn ($r) => (string) $r['column_name'], q('SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ?', [t('entry_rev')]));
+    // MySQL 8 は information_schema の列名を大文字（COLUMN_NAME）で返すので、別名でそろえる
+    $revColumns = array_map(static fn ($r) => (string) $r['name'], q('SELECT column_name AS name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ?', [t('entry_rev')]));
     $entryRow = array_intersect_key($entryRow, array_flip($revColumns));
     q('INSERT INTO ' . t('entry_rev') . ' (' . implode(',', array_keys($entryRow)) . ') VALUES (' . implode(',', array_fill(0, count($entryRow), '?')) . ')', array_values($entryRow), 'exec');
     foreach (q('SELECT * FROM ' . t('column') . ' WHERE column_entry_id = ?', [$e5]) as $row) {
@@ -331,8 +341,7 @@ foreach ([1 => 'rev-a.jpg', 2 => 'rev-b.jpg'] as $revId => $file) {
 // 6. カスタムユニット（画像フィールド・ファイルフィールドと、ユニット内のフィールドグループ）
 $e6 = entry($blogId, 'a2m-custom', 'カスタムユニットを持つエントリー');
 foreach ([1, 2] as $n) {
-    unit($blogId, $e6, $n, 'custom_a2m_card');
-    $uid = (string) q('SELECT column_id FROM ' . t('column') . ' WHERE column_entry_id = ? AND column_sort = ?', [$e6, $n], 'one');
+    $uid = unit($blogId, $e6, $n, 'custom_a2m_card');
     $rows = imageField('photo', $p . "custom-{$n}.jpg", '', "カスタム画像 {$n}") + fileField('doc', $p . 'estimate.pdf', "資料 {$n}.pdf") + ['title' => "カスタム {$n}"];
     foreach ($rows as $key => $value) {
         q('INSERT INTO ' . t('field') . ' (field_key, field_value, field_type, field_sort, field_search, field_eid, field_unit_id, field_blog_id) VALUES (?, ?, NULL, 1, \'off\', NULL, ?, ?)', [$key, $value, $uid, $blogId], 'exec');
